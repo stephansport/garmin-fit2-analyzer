@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Garmin FIT2 Analyzer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+
+<body>
+  <header class="site-header">
+    <div class="brand-wrap">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 64 64" role="img" aria-label="Garmin FIT2 Analyzer Logo">
+          <path d="M10 44 L24 20 L34 34 L44 14 L54 44" fill="none" stroke="currentColor" stroke-width="6"
+            stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </div>
+      <div>
+        <p class="eyebrow">Single-File Analyse</p>
+        <h1>Garmin FIT2 Analyzer</h1>
+      </div>
+    </div>
+    <button id="themeToggle" class="ghost-button" type="button" aria-label="Theme wechseln">Theme</button>
+  </header>
+
+  <main class="layout">
+    <section class="panel upload-panel">
+      <h2>FIT-Datei laden</h2>
+      <p class="muted">Lade eine einzelne Aktivität hoch und analysiere Metriken, Karte und Höhenprofil.</p>
+
+      <label for="fitFile" class="file-label">FIT-Datei auswählen</label>
+      <input id="fitFile" type="file" accept=".fit" />
+
+      <div class="button-row">
+        <button id="analyzeBtn" class="primary-button" type="button">Datei analysieren</button>
+        <button id="resetBtn" class="ghost-button" type="button">Zurücksetzen</button>
+      </div>
+
+      <div id="statusBox" class="status-box info">Noch keine Datei geladen.</div>
+    </section>
+
+    <section class="panel summary-panel">
+      <h2>Überblick</h2>
+      <div class="metrics-grid" id="metricsGrid">
+        <article class="metric-card"><span>Startzeit</span><strong id="metricStart">–</strong></article>
+        <article class="metric-card"><span>Dauer</span><strong id="metricDuration">–</strong></article>
+        <article class="metric-card"><span>Distanz</span><strong id="metricDistance">–</strong></article>
+        <article class="metric-card"><span>Ø Geschwindigkeit</span><strong id="metricSpeed">–</strong></article>
+        <article class="metric-card"><span>Ø Herzfrequenz</span><strong id="metricHr">–</strong></article>
+        <article class="metric-card"><span>Ø Leistung</span><strong id="metricPower">–</strong></article>
+        <article class="metric-card"><span>Anstieg</span><strong id="metricAscent">–</strong></article>
+        <article class="metric-card"><span>Abstieg</span><strong id="metricDescent">–</strong></article>
+      </div>
+    </section>
+
+    <section class="split-panel" aria-label="Karte und Höhenprofil">
+      <div class="panel map-panel split-left">
+        <h2>Karte</h2>
+        <div id="map"></div>
+      </div>
+
+      <div id="splitHandle" class="split-handle" role="separator" aria-orientation="vertical"
+        aria-label="Breite zwischen Karte und Höhenprofil anpassen"></div>
+
+      <div class="panel chart-panel split-right">
+        <h2>Höhenprofil</h2>
+        <div class="chart-wrap">
+          <canvas id="altitudeChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel details-panel">
+      <h2>Detailwerte</h2>
+      <table>
+        <tbody>
+          <tr>
+            <td>Dateiname</td>
+            <td id="detailFileName">–</td>
+          </tr>
+          <tr>
+            <td>Punkte</td>
+            <td id="detailPoints">–</td>
+          </tr>
+          <tr>
+            <td>GPS vorhanden</td>
+            <td id="detailGps">–</td>
+          </tr>
+          <tr>
+            <td>Power vorhanden</td>
+            <td id="detailPowerAvailable">–</td>
+          </tr>
+          <tr>
+            <td>Herzfrequenz vorhanden</td>
+            <td id="detailHrAvailable">–</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script type="module" src="./src/app.js"></script>
+</body>
+
+</html>
