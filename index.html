@@ -61,7 +61,18 @@
 
     <section class="split-panel" aria-label="Karte und Höhenprofil">
       <div class="panel map-panel split-left">
-        <h2>Karte</h2>
+        <div class="panel-header">
+          <h2>Karte</h2>
+          <div class="header-button-group">
+            <button id="mapCenterToggle" class="ghost-button ghost-button-small" type="button">
+              Training zentrieren
+            </button>
+            <button id="mapExpandToggle" class="ghost-button ghost-button-small" type="button">
+              Karte vergrößern
+            </button>
+          </div>
+        </div>
+
         <div id="map"></div>
       </div>
 
@@ -74,10 +85,8 @@
           <canvas id="altitudeChart"></canvas>
         </div>
       </div>
-
-      <div id="horizontalHandle" class="split-handle-horizontal" role="separator" aria-orientation="horizontal"
-        aria-label="Höhe der Karten- und Profilzeile anpassen"></div>
     </section>
+
 
     <section class="panel details-panel">
       <h2>Detailwerte</h2>
@@ -106,6 +115,37 @@
         </tbody>
       </table>
     </section>
+
+    <section class="panel range-panel" id="rangePanel" style="display:none;">
+      <h2>Bereichsanalyse</h2>
+
+      <div class="range-slider-wrap">
+        <div class="range-labels">
+          <span id="rangeFromLabel">Von: 0.00 km</span>
+          <span id="rangeToLabel">Bis: 0.00 km</span>
+        </div>
+        <div class="dual-slider">
+          <input type="range" id="rangeFrom" class="range-input range-input-from" min="0" max="100" value="0"
+            step="1" />
+          <input type="range" id="rangeTo" class="range-input range-input-to" min="0" max="100" value="100" step="1" />
+          <div class="range-track">
+            <div class="range-track-fill" id="rangeTrackFill"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="range-metrics-grid" id="rangeMetricsGrid">
+        <article class="metric-card"><span>Zeit</span><strong id="rangeDuration">–</strong></article>
+        <article class="metric-card"><span>Distanz</span><strong id="rangeDistance">–</strong></article>
+        <article class="metric-card"><span>Ø Geschwindigkeit</span><strong id="rangeSpeed">–</strong></article>
+        <article class="metric-card"><span>Ø Herzfrequenz</span><strong id="rangeHr">–</strong></article>
+        <article class="metric-card"><span>Anstieg</span><strong id="rangeAscent">–</strong></article>
+        <article class="metric-card"><span>Abstieg</span><strong id="rangeDescent">–</strong></article>
+        <article class="metric-card"><span>Ø Leistung</span><strong id="rangePower">–</strong></article>
+        <article class="metric-card"><span>Ø Kadenz</span><strong id="rangeCadence">–</strong></article>
+      </div>
+    </section>
+
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>

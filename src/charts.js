@@ -1,6 +1,7 @@
 let altitudeChartInstance = null;
 let mapInstance = null;
 let trackLayer = null;
+let lastBounds = null; // neu
 
 export function getMapInstance() {
   return mapInstance;
@@ -8,6 +9,10 @@ export function getMapInstance() {
 
 export function getAltitudeChart() {
   return altitudeChartInstance;
+}
+
+export function getLastBounds() {
+  return lastBounds;
 }
 
 export function renderMap(records) {
@@ -29,6 +34,7 @@ export function renderMap(records) {
 
   if (!points.length) {
     mapInstance.setView([48.0, 8.0], 6);
+    lastBounds = null;
     return;
   }
 
@@ -38,8 +44,10 @@ export function renderMap(records) {
     opacity: 0.9
   }).addTo(mapInstance);
 
-  mapInstance.fitBounds(trackLayer.getBounds(), { padding: [20, 20] });
+  lastBounds = trackLayer.getBounds(); // neu: Bounds merken
+  mapInstance.fitBounds(lastBounds, { padding: [20, 20] });
 }
+
 
 export function renderAltitudeChart(records) {
   const canvas = document.getElementById('altitudeChart');

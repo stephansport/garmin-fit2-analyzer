@@ -1,6 +1,21 @@
 import { parseFitFile } from './api.js';
 import { summarizeActivity, formatDuration, formatDistance, formatSpeed, formatNumber } from './metrics.js';
-import { renderMap, renderAltitudeChart, resetVisuals, getMapInstance, getAltitudeChart } from './charts.js';
+import {
+  renderMap,
+  renderAltitudeChart,
+  resetVisuals,
+  getMapInstance,
+  getAltitudeChart,
+  getLastBounds
+} from './charts.js';
+import {
+  summarizeActivity,
+  summarizeRange,        // neu
+  formatDuration,
+  formatDistance,
+  formatSpeed,
+  formatNumber
+} from './metrics.js';
 
 const fitFileInput = document.getElementById('fitFile');
 const analyzeBtn = document.getElementById('analyzeBtn');
@@ -8,8 +23,31 @@ const resetBtn = document.getElementById('resetBtn');
 const statusBox = document.getElementById('statusBox');
 const themeToggle = document.getElementById('themeToggle');
 const splitHandle = document.getElementById('splitHandle');
-const horizontalHandle = document.getElementById('horizontalHandle');
 const splitPanel = document.querySelector('.split-panel');
+const mapExpandToggle = document.getElementById('mapExpandToggle');
+const mapCenterToggle = document.getElementById('mapCenterToggle');
+const mapPanel = document.querySelector('.map-panel');
+const mapElement = document.getElementById('map');
+const rangePanel = document.getElementById('rangePanel');
+const rangeFrom = document.getElementById('rangeFrom');
+const rangeTo = document.getElementById('rangeTo');
+const rangeFromLabel = document.getElementById('rangeFromLabel');
+const rangeToLabel = document.getElementById('rangeToLabel');
+const rangeTrackFill = document.getElementById('rangeTrackFill');
+
+const rangeFields = {
+  duration: document.getElementById('rangeDuration'),
+  distance: document.getElementById('rangeDistance'),
+  speed: document.getElementById('rangeSpeed'),
+  hr: document.getElementById('rangeHr'),
+  ascent: document.getElementById('rangeAscent'),
+  descent: document.getElementById('rangeDescent'),
+  power: document.getElementById('rangePower'),
+  cadence: document.getElementById('rangeCadence')
+};
+
+let currentRecords = [];
+
 
 const fields = {
   metricStart: document.getElementById('metricStart'),
@@ -31,7 +69,10 @@ analyzeBtn.addEventListener('click', handleAnalyze);
 resetBtn.addEventListener('click', handleReset);
 themeToggle.addEventListener('click', toggleTheme);
 initTheme();
-initHorizontalSplit();
+initResizableSplit();
+initMapExpandToggle();
+initMapCenterToggle();
+
 
 async function handleAnalyze() {
   const file = fitFileInput.files?.[0];
@@ -48,6 +89,8 @@ async function handleAnalyze() {
     renderSummary(file.name, summary);
     renderMap(data.records || []);
     renderAltitudeChart(data.records || []);
+    currentRecords = data.records || [];
+    initRangeSlider(currentRecords);
     setStatus('Analyse erfolgreich abgeschlossen.', 'success');
   } catch (error) {
     console.error(error);
@@ -79,6 +122,8 @@ function handleReset() {
     field.textContent = '–';
   });
   resetVisuals();
+  rangePanel.style.display = 'none';
+  currentRecords = [];
   setStatus('Ansicht wurde zurückgesetzt.', 'info');
 }
 
@@ -160,64 +205,103 @@ function initResizableSplit() {
   });
 }
 
-function initHorizontalSplit() {
-  if (!horizontalHandle || !splitPanel) return;
 
-  let isDragging = false;
-  let startY = 0;
-  let startHeight = 0;
+function initMapExpandToggle() {
+  if (!mapExpandToggle || !mapPanel || !mapElement) return;
 
-  horizontalHandle.addEventListener('mousedown', (event) => {
-    event.preventDefault();
-    isDragging = true;
-    startY = event.clientY;
-    startHeight = splitPanel.getBoundingClientRect().height;
-    horizontalHandle.classList.add('is-dragging');
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'row-resize';
-  });
+  mapExpandToggle.addEventListener('click', () => {
+    const expanded = mapPanel.classList.toggle('expanded');
 
-  window.addEventListener('mousemove', (event) => {
-    if (!isDragging) return;
-    if (window.innerWidth <= 700) return; // auf kleinen Screens kein Draggen
+    mapExpandToggle.textContent = expanded
+      ? 'Karte verkleinern'
+      : 'Karte vergrößern';
 
-    const dy = event.clientY - startY;
-    let newHeight = startHeight + dy;
-
-    const minHeight = 220;               // minimale Höhe für Karte+Profil
-    const maxHeight = window.innerHeight * 0.8; // optionales Limit
-
-    if (newHeight < minHeight) newHeight = minHeight;
-    if (newHeight > maxHeight) newHeight = maxHeight;
-
-    splitPanel.style.height = `${newHeight}px`;
+    // KEIN mapElement.style.height mehr - CSS-Klasse übernimmt das
 
     const map = getMapInstance();
-    if (map) {
-      // Leaflet-Karte nach Höhenänderung aktualisieren
-      map.invalidateSize(false);
-    }
+    const bounds = getLastBounds();
 
-    const chart = getAltitudeChart();
-    if (chart) {
-      // Chart.js an neue Containerhöhe anpassen
-      chart.resize();
-    }
-  });
+    if (!map || !bounds) return;
 
-  window.addEventListener('mouseup', () => {
-    if (!isDragging) return;
-    isDragging = false;
-    horizontalHandle.classList.remove('is-dragging');
-    document.body.style.userSelect = '';
-    document.body.style.cursor = '';
-
-    // kleines Nachziehen am Ende
+    // Warten bis CSS-Transition fertig ist (0.2s), dann Leaflet updaten
     setTimeout(() => {
-      const map = getMapInstance();
-      if (map) map.invalidateSize(false);
-      const chart = getAltitudeChart();
-      if (chart) chart.resize();
-    }, 50);
+      map.invalidateSize();
+      map.fitBounds(bounds, { padding: [20, 20] });
+    }, 220); // 220ms = leicht mehr als die 0.2s CSS-Transition
   });
+}
+// <- schließt initMapExpandToggle
+
+
+
+
+function initMapCenterToggle() {
+  if (!mapCenterToggle) return;
+
+  mapCenterToggle.addEventListener('click', () => {
+    const map = getMapInstance();
+    const bounds = getLastBounds();
+
+    if (map && bounds) {
+      map.invalidateSize(false);
+      map.fitBounds(bounds, { padding: [20, 20] });
+    }
+  });
+}
+
+function initRangeSlider(records) {
+  if (!records.length) return;
+
+  const max = records.length - 1;
+  rangeFrom.min = 0; rangeFrom.max = max; rangeFrom.value = 0;
+  rangeTo.min   = 0; rangeTo.max   = max; rangeTo.value   = max;
+
+  // Events – oninput statt addEventListener verhindert doppelte Handler
+  rangeFrom.oninput = () => handleRangeChange(records);
+  rangeTo.oninput   = () => handleRangeChange(records);
+
+  rangePanel.style.display = '';
+
+  // Einmal sofort berechnen
+  handleRangeChange(records);
+}
+
+function handleRangeChange(records) {
+  let from = parseInt(rangeFrom.value, 10);
+  let to   = parseInt(rangeTo.value,   10);
+
+  // Thumbs dürfen sich nicht überlappen
+  if (from > to) {
+    if (document.activeElement === rangeFrom) {
+      rangeFrom.value = to; from = to;
+    } else {
+      rangeTo.value = from; to = from;
+    }
+  }
+
+  const max = records.length - 1;
+
+  // Farbige Track-Füllung zwischen den Thumbs
+  rangeTrackFill.style.left  = `${(from / max) * 100}%`;
+  rangeTrackFill.style.width = `${((to - from) / max) * 100}%`;
+
+  // Labels
+  const dFrom = records[from].distance;
+  const dTo   = records[to].distance;
+  rangeFromLabel.textContent = `Von: ${dFrom != null ? (dFrom / 1000).toFixed(2) + ' km' : '–'}`;
+  rangeToLabel.textContent   = `Bis: ${dTo   != null ? (dTo   / 1000).toFixed(2) + ' km' : '–'}`;
+
+  // Werte berechnen
+  const slice   = records.slice(from, to + 1);
+  const summary = summarizeRange(slice);
+  if (!summary) return;
+
+  rangeFields.duration.textContent = formatDuration(summary.durationSeconds);
+  rangeFields.distance.textContent = formatDistance(summary.distance);
+  rangeFields.speed.textContent    = formatSpeed(summary.avgSpeed);
+  rangeFields.hr.textContent       = formatNumber(summary.avgHeartRate,  0, 'bpm');
+  rangeFields.ascent.textContent   = formatNumber(summary.totalAscent,   0, 'm');
+  rangeFields.descent.textContent  = formatNumber(summary.totalDescent,  0, 'm');
+  rangeFields.power.textContent    = formatNumber(summary.avgPower,      0, 'W');
+  rangeFields.cadence.textContent  = formatNumber(summary.avgCadence,    0, 'rpm');
 }

@@ -54,6 +54,56 @@ export function summarizeActivity(data) {
   };
 }
 
+export function summarizeRange(records) {
+  if (!records || records.length < 2) return null;
+
+  const first = records[0];
+  const last  = records[records.length - 1];
+
+  const startTs = first.timestamp ? new Date(first.timestamp).getTime() : null;
+  const endTs   = last.timestamp  ? new Date(last.timestamp).getTime()  : null;
+  const durationSeconds = (startTs && endTs)
+    ? Math.round((endTs - startTs) / 1000)
+    : null;
+
+  const distStart = first.distance ?? null;
+  const distEnd   = last.distance  ?? null;
+  const distance  = (distStart !== null && distEnd !== null)
+    ? distEnd - distStart
+    : null;
+
+  const avg = arr =>
+    arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+
+  const hrValues    = records.map(r => r.heart_rate).filter(v => typeof v === 'number' && v > 0);
+  const speedValues = records.map(r => r.speed).filter(v => typeof v === 'number' && v > 0);
+  const powerValues = records.map(r => r.power).filter(v => typeof v === 'number' && v > 0);
+  const cadValues   = records.map(r => r.cadence).filter(v => typeof v === 'number' && v > 0);
+
+  let ascent = 0;
+  let descent = 0;
+  for (let i = 1; i < records.length; i++) {
+    const prev = records[i - 1].altitude;
+    const curr = records[i].altitude;
+    if (typeof prev === 'number' && typeof curr === 'number') {
+      const diff = curr - prev;
+      if (diff > 0) ascent  += diff;
+      else          descent += Math.abs(diff);
+    }
+  }
+
+  return {
+    durationSeconds,
+    distance,
+    avgSpeed:     avg(speedValues),
+    avgHeartRate: avg(hrValues),
+    avgPower:     avg(powerValues),
+    avgCadence:   avg(cadValues),
+    totalAscent:  Math.round(ascent),
+    totalDescent: Math.round(descent)
+  };
+}
+
 function average(values) {
   if (!values.length) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
