@@ -112,6 +112,7 @@ h2 {
   grid-template-columns: minmax(320px, 1fr) 10px minmax(320px, 1fr);
   gap: 0;
   align-items: stretch;
+  min-height: 260px;
 }
 
 .split-left,
@@ -142,6 +143,7 @@ h2 {
   position: relative;
 }
 
+
 .split-handle::before {
   content: '';
   position: absolute;
@@ -152,6 +154,37 @@ h2 {
 
 .split-handle:hover::before,
 .split-handle.is-dragging::before {
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.split-handle-horizontal {
+  grid-column: 1 / -1; /* über die gesamte Grid-Breite laufen */
+  height: 10px;
+  cursor: row-resize;
+  background: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 3px,
+    var(--border) 3px,
+    var(--border) 7px,
+    transparent 7px,
+    transparent 100%
+  );
+  position: relative;
+  margin-top: 0.5rem;
+  border-radius: 999px;
+}
+
+.split-handle-horizontal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  transition: background 160ms ease;
+}
+
+.split-handle-horizontal:hover::before,
+.split-handle-horizontal.is-dragging::before {
   background: color-mix(in srgb, var(--primary) 18%, transparent);
 }
 
@@ -307,6 +340,10 @@ td:last-child {
 }
 
 @media (max-width: 700px) {
+  .split-handle-horizontal {
+    display: none;
+  }
+  
   .split-panel {
     grid-template-columns: 1fr;
     gap: 1rem;

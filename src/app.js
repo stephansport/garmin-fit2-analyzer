@@ -8,6 +8,7 @@ const resetBtn = document.getElementById('resetBtn');
 const statusBox = document.getElementById('statusBox');
 const themeToggle = document.getElementById('themeToggle');
 const splitHandle = document.getElementById('splitHandle');
+const horizontalHandle = document.getElementById('horizontalHandle');
 const splitPanel = document.querySelector('.split-panel');
 
 const fields = {
@@ -30,6 +31,7 @@ analyzeBtn.addEventListener('click', handleAnalyze);
 resetBtn.addEventListener('click', handleReset);
 themeToggle.addEventListener('click', toggleTheme);
 initTheme();
+initHorizontalSplit();
 
 async function handleAnalyze() {
   const file = fitFileInput.files?.[0];
@@ -155,5 +157,67 @@ function initResizableSplit() {
       const chart = getAltitudeChart();
       if (chart) chart.resize();
     }, 100);
+  });
+}
+
+function initHorizontalSplit() {
+  if (!horizontalHandle || !splitPanel) return;
+
+  let isDragging = false;
+  let startY = 0;
+  let startHeight = 0;
+
+  horizontalHandle.addEventListener('mousedown', (event) => {
+    event.preventDefault();
+    isDragging = true;
+    startY = event.clientY;
+    startHeight = splitPanel.getBoundingClientRect().height;
+    horizontalHandle.classList.add('is-dragging');
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'row-resize';
+  });
+
+  window.addEventListener('mousemove', (event) => {
+    if (!isDragging) return;
+    if (window.innerWidth <= 700) return; // auf kleinen Screens kein Draggen
+
+    const dy = event.clientY - startY;
+    let newHeight = startHeight + dy;
+
+    const minHeight = 220;               // minimale Höhe für Karte+Profil
+    const maxHeight = window.innerHeight * 0.8; // optionales Limit
+
+    if (newHeight < minHeight) newHeight = minHeight;
+    if (newHeight > maxHeight) newHeight = maxHeight;
+
+    splitPanel.style.height = `${newHeight}px`;
+
+    const map = getMapInstance();
+    if (map) {
+      // Leaflet-Karte nach Höhenänderung aktualisieren
+      map.invalidateSize(false);
+    }
+
+    const chart = getAltitudeChart();
+    if (chart) {
+      // Chart.js an neue Containerhöhe anpassen
+      chart.resize();
+    }
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    horizontalHandle.classList.remove('is-dragging');
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+
+    // kleines Nachziehen am Ende
+    setTimeout(() => {
+      const map = getMapInstance();
+      if (map) map.invalidateSize(false);
+      const chart = getAltitudeChart();
+      if (chart) chart.resize();
+    }, 50);
   });
 }
