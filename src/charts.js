@@ -1,7 +1,41 @@
+import Chart from 'chart.js/auto';
+
+Chart.register(altitudeRangePlugin);
+
 let altitudeChartInstance = null;
 let mapInstance = null;
 let trackLayer = null;
-let lastBounds = null; // neu
+let lastBounds = null; 
+let rangeLayer = null;      // neu
+let rangeStartMarker = null;
+let rangeEndMarker = null;
+
+const altitudeRangePlugin = {
+  id: 'altitudeRangePlugin',
+  beforeDraw(chart, args, options) {
+    const range = chart.options.plugins && chart.options.plugins.rangeSelection;
+    if (!range) return;
+
+    const { fromIndex, toIndex } = range;
+    if (fromIndex == null || toIndex == null) return;
+
+    const xScale = chart.scales.x;
+    const yScale = chart.scales.y;
+    if (!xScale || !yScale) return;
+
+    const ctx = chart.ctx;
+
+    const left  = xScale.getPixelForValue(fromIndex);
+    const right = xScale.getPixelForValue(toIndex);
+    const top    = yScale.top;
+    const bottom = yScale.bottom;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(11, 107, 117, 0.08)'; // var(--primary) mit leichter Transparenz
+    ctx.fillRect(left, top, right - left, bottom - top);
+    ctx.restore();
+  }
+};
 
 export function getMapInstance() {
   return mapInstance;
@@ -95,4 +129,56 @@ export function resetVisuals() {
   if (mapInstance) {
     mapInstance.setView([48.0, 8.0], 6);
   }
+}
+
+export function highlightMapRange(records, fromIndex, toIndex) {
+  if (!mapInstance || !records.length) return;
+
+  // Aufräumen
+  if (rangeLayer) {
+    rangeLayer.remove();
+    rangeLayer = null;
+  }
+  if (rangeStartMarker) {
+    rangeStartMarker.remove();
+    rangeStartMarker = null;
+  }
+  if (rangeEndMarker) {
+    rangeEndMarker.remove();
+    rangeEndMarker = null;
+  }
+
+  if (fromIndex > toIndex) return;
+
+  const slice = records.slice(fromIndex, toIndex + 1);
+  const points = slice
+    .filter(r => Number.isFinite(r.position_lat) && Number.isFinite(r.position_long))
+    .map(r => [r.position_lat, r.position_long]);
+
+  if (!points.length) return;
+
+  rangeLayer = L.polyline(points, {
+    color: '#0b6b75',     // var(--primary)
+    weight: 5,
+    opacity: 0.9
+  }).addTo(mapInstance);
+
+  const start = points[0];
+  const end   = points[points.length - 1];
+
+  rangeStartMarker = L.circleMarker(start, {
+    radius: 5,
+    color: '#0b6b75',
+    weight: 2,
+    fillColor: '#ffffff',
+    fillOpacity: 1
+  }).addTo(mapInstance);
+
+  rangeEndMarker = L.circleMarker(end, {
+    radius: 5,
+    color: '#0b6b75',
+    weight: 2,
+    fillColor: '#ffffff',
+    fillOpacity: 1
+  }).addTo(mapInstance);
 }

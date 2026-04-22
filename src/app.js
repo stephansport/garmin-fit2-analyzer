@@ -1,13 +1,4 @@
 import { parseFitFile } from './api.js';
-import { summarizeActivity, formatDuration, formatDistance, formatSpeed, formatNumber } from './metrics.js';
-import {
-  renderMap,
-  renderAltitudeChart,
-  resetVisuals,
-  getMapInstance,
-  getAltitudeChart,
-  getLastBounds
-} from './charts.js';
 import {
   summarizeActivity,
   summarizeRange,        // neu
@@ -16,6 +7,16 @@ import {
   formatSpeed,
   formatNumber
 } from './metrics.js';
+import {
+  renderMap,
+  renderAltitudeChart,
+  resetVisuals,
+  getMapInstance,
+  getAltitudeChart,
+  getLastBounds,
+  highlightMapRange
+} from './charts.js';
+
 
 const fitFileInput = document.getElementById('fitFile');
 const analyzeBtn = document.getElementById('analyzeBtn');
@@ -254,11 +255,11 @@ function initRangeSlider(records) {
 
   const max = records.length - 1;
   rangeFrom.min = 0; rangeFrom.max = max; rangeFrom.value = 0;
-  rangeTo.min   = 0; rangeTo.max   = max; rangeTo.value   = max;
+  rangeTo.min = 0; rangeTo.max = max; rangeTo.value = max;
 
   // Events – oninput statt addEventListener verhindert doppelte Handler
   rangeFrom.oninput = () => handleRangeChange(records);
-  rangeTo.oninput   = () => handleRangeChange(records);
+  rangeTo.oninput = () => handleRangeChange(records);
 
   rangePanel.style.display = '';
 
@@ -268,40 +269,59 @@ function initRangeSlider(records) {
 
 function handleRangeChange(records) {
   let from = parseInt(rangeFrom.value, 10);
-  let to   = parseInt(rangeTo.value,   10);
+  let to = parseInt(rangeTo.value, 10);
 
   // Thumbs dürfen sich nicht überlappen
+  const slice = records.slice(from, to + 1);
+  const summary = summarizeRange(slice);
+  if (!summary) return;
+
   if (from > to) {
     if (document.activeElement === rangeFrom) {
       rangeFrom.value = to; from = to;
     } else {
       rangeTo.value = from; to = from;
     }
+    highlightAltitudeRange(from, to);
+    highlightMapRange(records, from, to);
   }
 
   const max = records.length - 1;
 
   // Farbige Track-Füllung zwischen den Thumbs
-  rangeTrackFill.style.left  = `${(from / max) * 100}%`;
+  rangeTrackFill.style.left = `${(from / max) * 100}%`;
   rangeTrackFill.style.width = `${((to - from) / max) * 100}%`;
 
   // Labels
   const dFrom = records[from].distance;
-  const dTo   = records[to].distance;
+  const dTo = records[to].distance;
   rangeFromLabel.textContent = `Von: ${dFrom != null ? (dFrom / 1000).toFixed(2) + ' km' : '–'}`;
-  rangeToLabel.textContent   = `Bis: ${dTo   != null ? (dTo   / 1000).toFixed(2) + ' km' : '–'}`;
+  rangeToLabel.textContent = `Bis: ${dTo != null ? (dTo / 1000).toFixed(2) + ' km' : '–'}`;
 
   // Werte berechnen
-  const slice   = records.slice(from, to + 1);
+  const slice = records.slice(from, to + 1);
   const summary = summarizeRange(slice);
   if (!summary) return;
 
   rangeFields.duration.textContent = formatDuration(summary.durationSeconds);
   rangeFields.distance.textContent = formatDistance(summary.distance);
-  rangeFields.speed.textContent    = formatSpeed(summary.avgSpeed);
-  rangeFields.hr.textContent       = formatNumber(summary.avgHeartRate,  0, 'bpm');
-  rangeFields.ascent.textContent   = formatNumber(summary.totalAscent,   0, 'm');
-  rangeFields.descent.textContent  = formatNumber(summary.totalDescent,  0, 'm');
-  rangeFields.power.textContent    = formatNumber(summary.avgPower,      0, 'W');
-  rangeFields.cadence.textContent  = formatNumber(summary.avgCadence,    0, 'rpm');
+  rangeFields.speed.textContent = formatSpeed(summary.avgSpeed);
+  rangeFields.hr.textContent = formatNumber(summary.avgHeartRate, 0, 'bpm');
+  rangeFields.ascent.textContent = formatNumber(summary.totalAscent, 0, 'm');
+  rangeFields.descent.textContent = formatNumber(summary.totalDescent, 0, 'm');
+  rangeFields.power.textContent = formatNumber(summary.avgPower, 0, 'W');
+  rangeFields.cadence.textContent = formatNumber(summary.avgCadence, 0, 'rpm');
+}
+
+function highlightAltitudeRange(fromIndex, toIndex) {
+  const chart = getAltitudeChart();
+  if (!chart) return;
+
+  chart.options.plugins = chart.options.plugins || {};
+  chart.options.plugins.rangeSelection = {
+    fromIndex,
+    toIndex
+  };
+
+  chart.update();
 }
