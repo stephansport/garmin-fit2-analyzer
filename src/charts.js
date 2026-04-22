@@ -1,11 +1,8 @@
-import Chart from 'chart.js/auto';
-
-Chart.register(altitudeRangePlugin);
 
 let altitudeChartInstance = null;
 let mapInstance = null;
 let trackLayer = null;
-let lastBounds = null; 
+let lastBounds = null;
 let rangeLayer = null;      // neu
 let rangeStartMarker = null;
 let rangeEndMarker = null;
@@ -25,9 +22,9 @@ const altitudeRangePlugin = {
 
     const ctx = chart.ctx;
 
-    const left  = xScale.getPixelForValue(fromIndex);
+    const left = xScale.getPixelForValue(fromIndex);
     const right = xScale.getPixelForValue(toIndex);
-    const top    = yScale.top;
+    const top = yScale.top;
     const bottom = yScale.bottom;
 
     ctx.save();
@@ -36,6 +33,9 @@ const altitudeRangePlugin = {
     ctx.restore();
   }
 };
+
+// Chart ist global über das Script-Tag vorhanden
+Chart.register(altitudeRangePlugin);
 
 export function getMapInstance() {
   return mapInstance;
@@ -85,8 +85,14 @@ export function renderMap(records) {
 
 export function renderAltitudeChart(records) {
   const canvas = document.getElementById('altitudeChart');
-  const labels = records.map(r => Number.isFinite(r.distance) ? (r.distance / 1000).toFixed(2) : '');
-  const values = records.map(r => Number.isFinite(r.altitude) ? r.altitude : null);
+  if (!canvas) return;
+
+  const labels = records.map(r =>
+    Number.isFinite(r.distance) ? (r.distance / 1000).toFixed(2) : ''
+  );
+  const values = records.map(r =>
+    Number.isFinite(r.altitude) ? r.altitude : null
+  );
 
   if (altitudeChartInstance) {
     altitudeChartInstance.destroy();
@@ -96,15 +102,29 @@ export function renderAltitudeChart(records) {
     type: 'line',
     data: {
       labels,
-      datasets: [{
-        label: 'Höhe (m)',
-        data: values,
-        borderColor: '#0b6b75',
-        backgroundColor: 'rgba(11, 107, 117, 0.12)',
-        fill: true,
-        tension: 0.18,
-        pointRadius: 0
-      }]
+      datasets: [
+        {
+          label: 'Höhe (m)',
+          data: values,
+          borderColor: '#0b6b75',
+          backgroundColor: 'rgba(11, 107, 117, 0.12)',
+          fill: true,
+          tension: 0.18,
+          pointRadius: 0,
+          order: 1
+        },
+        {
+          label: 'Ausgewählter Bereich',
+          data: new Array(values.length).fill(null),
+          borderColor: 'rgba(11, 107, 117, 0)',      // keine Linie
+          backgroundColor: 'rgba(11, 107, 117, 0.22)', // etwas kräftiger
+          fill: true,
+          tension: 0.18,
+          pointRadius: 0,
+          spanGaps: false,
+          order: 0                                  // zuerst gezeichnet, dann Linie oben drauf
+        }
+      ]
     },
     options: {
       responsive: true,
@@ -134,6 +154,8 @@ export function resetVisuals() {
 export function highlightMapRange(records, fromIndex, toIndex) {
   if (!mapInstance || !records.length) return;
 
+  console.log('mapRange', { fromIndex, toIndex });
+
   // Aufräumen
   if (rangeLayer) {
     rangeLayer.remove();
@@ -155,6 +177,8 @@ export function highlightMapRange(records, fromIndex, toIndex) {
     .filter(r => Number.isFinite(r.position_lat) && Number.isFinite(r.position_long))
     .map(r => [r.position_lat, r.position_long]);
 
+  console.log('points length', points.length);
+
   if (!points.length) return;
 
   rangeLayer = L.polyline(points, {
@@ -164,7 +188,7 @@ export function highlightMapRange(records, fromIndex, toIndex) {
   }).addTo(mapInstance);
 
   const start = points[0];
-  const end   = points[points.length - 1];
+  const end = points[points.length - 1];
 
   rangeStartMarker = L.circleMarker(start, {
     radius: 5,

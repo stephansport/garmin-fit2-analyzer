@@ -19,6 +19,8 @@ import {
 
 
 const fitFileInput = document.getElementById('fitFile');
+const positionIndex = document.getElementById('positionIndex');
+const positionLabel = document.getElementById('positionLabel');
 const analyzeBtn = document.getElementById('analyzeBtn');
 const resetBtn = document.getElementById('resetBtn');
 const statusBox = document.getElementById('statusBox');
@@ -263,6 +265,17 @@ function initRangeSlider(records) {
 
   rangePanel.style.display = '';
 
+  positionIndex.min = 0;
+  positionIndex.max = max;
+  positionIndex.value = 0;
+
+  updatePositionCursor(records, 0);
+
+  positionIndex.oninput = () => {
+    const idx = parseInt(positionIndex.value, 10) || 0;
+    updatePositionCursor(records, idx);
+  };
+
   // Einmal sofort berechnen
   handleRangeChange(records);
 }
@@ -272,19 +285,17 @@ function handleRangeChange(records) {
   let to = parseInt(rangeTo.value, 10);
 
   // Thumbs dürfen sich nicht überlappen
-  const slice = records.slice(from, to + 1);
-  const summary = summarizeRange(slice);
-  if (!summary) return;
-
   if (from > to) {
     if (document.activeElement === rangeFrom) {
-      rangeFrom.value = to; from = to;
+      rangeFrom.value = to;
+      from = to;
     } else {
-      rangeTo.value = from; to = from;
+      rangeTo.value = from;
+      to = from;
     }
-    highlightAltitudeRange(from, to);
-    highlightMapRange(records, from, to);
   }
+
+  console.log('RangeChange', { from, to, len: records.length });
 
   const max = records.length - 1;
 
@@ -295,10 +306,11 @@ function handleRangeChange(records) {
   // Labels
   const dFrom = records[from].distance;
   const dTo = records[to].distance;
+
   rangeFromLabel.textContent = `Von: ${dFrom != null ? (dFrom / 1000).toFixed(2) + ' km' : '–'}`;
   rangeToLabel.textContent = `Bis: ${dTo != null ? (dTo / 1000).toFixed(2) + ' km' : '–'}`;
 
-  // Werte berechnen
+  // Werte berechnen (nur EINMAL)
   const slice = records.slice(from, to + 1);
   const summary = summarizeRange(slice);
   if (!summary) return;
@@ -311,17 +323,89 @@ function handleRangeChange(records) {
   rangeFields.descent.textContent = formatNumber(summary.totalDescent, 0, 'm');
   rangeFields.power.textContent = formatNumber(summary.avgPower, 0, 'W');
   rangeFields.cadence.textContent = formatNumber(summary.avgCadence, 0, 'rpm');
+
+  // Bereich in Chart + Karte hervorheben
+  highlightAltitudeRange(from, to);
+  highlightMapRange(records, from, to);
 }
+
 
 function highlightAltitudeRange(fromIndex, toIndex) {
   const chart = getAltitudeChart();
   if (!chart) return;
 
-  chart.options.plugins = chart.options.plugins || {};
-  chart.options.plugins.rangeSelection = {
-    fromIndex,
-    toIndex
-  };
+  const mainDataset = chart.data.datasets[0];
+  const rangeDataset = chart.data.datasets[1];
+  if (!mainDataset || !rangeDataset) return;
 
-  chart.update();
+  const src = mainDataset.data;
+  const dst = rangeDataset.data;
+
+  // Sicherheit: Länge anpassen
+  if (dst.length !== src.length) {
+    rangeDataset.data = new Array(src.length).fill(null);
+  }
+
+  for (let i = 0; i < src.length; i++) {
+    if (i >= fromIndex && i <= toIndex) {
+      rangeDataset.data[i] = src[i];
+    } else {
+      rangeDataset.data[i] = null;
+    }
+  }
+
+  chart.update('none');
+}
+
+let cursorMarker = null;
+
+let cursorMarker = null;
+
+function updateMapCursor(records, index) {
+  const mapInstance = getMapInstance();
+  if (!mapInstance || !records.length) return;
+
+  const r = records[index];
+  if (!Number.isFinite(r.position_lat) || !Number.isFinite(r.position_long)) return;
+
+  const latlng = [r.position_lat, r.position_long];
+
+  if (!cursorMarker) {
+    cursorMarker = L.circleMarker(latlng, {
+      radius: 6,
+      color: '#0b6b75',
+      weight: 2,
+      fillColor: '#ffffff',
+      fillOpacity: 1
+    }).addTo(mapInstance);
+  } else {
+    cursorMarker.setLatLng(latlng);
+  }
+}
+
+function updatePositionCursor(records, index) {
+  const r = records[index];
+  if (!r) return;
+
+  positionLabel.textContent = Number.isFinite(r.distance)
+    ? (r.distance / 1000).toFixed(2) + ' km'
+    : `${index}`;
+
+  updateMapCursor(records, index);
+  updatePointStats(r);
+}
+
+function updatePointStats(r) {
+  // Beispiel-IDs, bitte an dein HTML anpassen
+  document.getElementById('pointHr').textContent =
+    r.heart_rate != null ? `${r.heart_rate} bpm` : '–';
+
+  document.getElementById('pointAltitude').textContent =
+    Number.isFinite(r.altitude) ? `${r.altitude} m` : '–';
+
+  document.getElementById('pointSpeed').textContent =
+    Number.isFinite(r.speed) ? `${(r.speed * 3.6).toFixed(1)} km/h` : '–';
+
+  document.getElementById('pointPower').textContent =
+    r.power != null ? `${r.power} W` : '–';
 }
