@@ -116,13 +116,26 @@ export function renderAltitudeChart(records) {
         {
           label: 'Ausgewählter Bereich',
           data: new Array(values.length).fill(null),
-          borderColor: 'rgba(11, 107, 117, 0)',      // keine Linie
-          backgroundColor: 'rgba(11, 107, 117, 0.22)', // etwas kräftiger
+          borderColor: 'rgba(11, 107, 117, 0)',
+          backgroundColor: 'rgba(11, 107, 117, 0.22)',
           fill: true,
           tension: 0.18,
           pointRadius: 0,
           spanGaps: false,
-          order: 0                                  // zuerst gezeichnet, dann Linie oben drauf
+          order: 0
+        },
+        {
+          label: 'Position',
+          data: new Array(values.length).fill(null),
+          borderColor: 'transparent',
+          backgroundColor: 'transparent',
+          pointRadius: 5,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#2563eb',  // blau, passend zum Map-Cursor
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          showLine: false,                   // nur Punkt, keine Linie
+          order: 2
         }
       ]
     },

@@ -30,6 +30,7 @@
   </header>
 
   <main class="layout">
+    <!-- FIT-Datei laden -->
     <section class="panel upload-panel">
       <h2>FIT-Datei laden</h2>
       <p class="muted">Lade eine einzelne Aktivität hoch und analysiere Metriken, Karte und Höhenprofil.</p>
@@ -45,6 +46,7 @@
       <div id="statusBox" class="status-box info">Noch keine Datei geladen.</div>
     </section>
 
+    <!-- Überblick -->
     <section class="panel summary-panel">
       <h2>Überblick</h2>
       <div class="metrics-grid" id="metricsGrid">
@@ -59,12 +61,26 @@
       </div>
     </section>
 
-    <div class="position-slider">
-      <label for="positionIndex">Position:</label>
-      <input id="positionIndex" type="range" min="0" max="0" value="0" step="1">
-      <span id="positionLabel">0.00 km</span>
-    </div>
+    <!-- Positions-Slider: eigenes Panel, volle Breite -->
+    <section class="panel position-panel">
+      <div class="position-inner">
+        <div class="position-slider-block">
+          <label for="positionIndex">Position:</label>
+          <input id="positionIndex" type="range" min="0" max="0" value="0" step="1">
+          <span id="positionLabel">0.00 km</span>
+        </div>
 
+        <!-- Werte-Bereich UNTER dem Slider -->
+        <div class="position-metrics">
+          <span>Herzfrequenz: <strong id="pointHr">–</strong></span>
+          <span>Höhe: <strong id="pointAltitude">–</strong></span>
+          <span>Geschwindigkeit: <strong id="pointSpeed">–</strong></span>
+          <span>Leistung: <strong id="pointPower">–</strong></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Karte + Höhenprofil -->
     <section class="split-panel" aria-label="Karte und Höhenprofil">
       <div class="panel map-panel split-left">
         <div class="panel-header">
@@ -93,6 +109,7 @@
       </div>
     </section>
 
+    <!-- Bereichsanalyse -->
     <section class="panel range-panel" id="rangePanel" style="display:none;">
       <h2>Bereichsanalyse</h2>
 
@@ -123,6 +140,7 @@
       </div>
     </section>
 
+    <!-- Detailwerte -->
     <section class="panel details-panel">
       <h2>Detailwerte</h2>
       <table>
@@ -150,13 +168,9 @@
         </tbody>
       </table>
     </section>
-
-
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script type="module" src="./src/app.js"></script>
-</body>
-
-</html>
+</body

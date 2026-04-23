@@ -359,8 +359,6 @@ function highlightAltitudeRange(fromIndex, toIndex) {
 
 let cursorMarker = null;
 
-let cursorMarker = null;
-
 function updateMapCursor(records, index) {
   const mapInstance = getMapInstance();
   if (!mapInstance || !records.length) return;
@@ -372,10 +370,10 @@ function updateMapCursor(records, index) {
 
   if (!cursorMarker) {
     cursorMarker = L.circleMarker(latlng, {
-      radius: 6,
-      color: '#0b6b75',
+      radius: 8,
+      color: '#f2f3f5',
       weight: 2,
-      fillColor: '#ffffff',
+      fillColor: '#030ff8',
       fillOpacity: 1
     }).addTo(mapInstance);
   } else {
@@ -393,19 +391,53 @@ function updatePositionCursor(records, index) {
 
   updateMapCursor(records, index);
   updatePointStats(r);
+
+  // NEU: Cursor-Punkt im Höhenprofil setzen
+  const chart = getAltitudeChart();
+  if (!chart) return;
+
+  const mainDataset = chart.data.datasets[0];
+  const rangeDataset = chart.data.datasets[1];
+  const cursorDataset = chart.data.datasets[2];
+  if (!mainDataset || !cursorDataset) return;
+
+  const src = mainDataset.data;
+  const dst = cursorDataset.data;
+
+  if (dst.length !== src.length) {
+    cursorDataset.data = new Array(src.length).fill(null);
+  }
+
+  for (let i = 0; i < src.length; i++) {
+    cursorDataset.data[i] = (i === index) ? src[i] : null;
+  }
+
+  chart.update('none');
+}
+
+function safeSetText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
 }
 
 function updatePointStats(r) {
-  // Beispiel-IDs, bitte an dein HTML anpassen
-  document.getElementById('pointHr').textContent =
-    r.heart_rate != null ? `${r.heart_rate} bpm` : '–';
+  safeSetText(
+    'pointHr',
+    r.heart_rate != null ? `${r.heart_rate} bpm` : '–'
+  );
 
-  document.getElementById('pointAltitude').textContent =
-    Number.isFinite(r.altitude) ? `${r.altitude} m` : '–';
+  safeSetText(
+    'pointAltitude',
+    Number.isFinite(r.altitude) ? `${r.altitude.toFixed(1)} m` : '–'
+  );
 
-  document.getElementById('pointSpeed').textContent =
-    Number.isFinite(r.speed) ? `${(r.speed * 3.6).toFixed(1)} km/h` : '–';
+  safeSetText(
+    'pointSpeed',
+    Number.isFinite(r.speed) ? `${(r.speed * 3.6).toFixed(1)} km/h` : '–'
+  );
 
-  document.getElementById('pointPower').textContent =
-    r.power != null ? `${r.power} W` : '–';
+  safeSetText(
+    'pointPower',
+    r.power != null ? `${r.power} W` : '–'
+  );
 }
