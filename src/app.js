@@ -84,17 +84,30 @@ async function handleAnalyze() {
     return;
   }
 
+  const mmpPanel = document.getElementById('maxMeanPowerPanel');
+  if (mmpPanel) mmpPanel.innerHTML = '';
+
   try {
     setStatus('Datei wird analysiert ...', 'info');
     analyzeBtn.disabled = true;
     const data = await parseFitFile(file);
     console.log('maxMeanPower from backend:', data.maxMeanPower);
+    console.log('✅ keys:', Object.keys(data.maxMeanPower || {}));
     const summary = summarizeActivity(data);
     renderSummary(file.name, summary);
     renderMap(data.records || []);
     renderAltitudeChart(data.records || []);
     currentRecords = data.records || [];
     initRangeSlider(currentRecords);
+
+    // NEU: maxMeanPower anzeigen
+    if (data.maxMeanPower && Object.keys(data.maxMeanPower).length > 0) {
+      console.log('🔵 Calling displayMaxMeanPower with:', data.maxMeanPower);
+      displayMaxMeanPower(data.maxMeanPower);
+    } else {
+      console.warn('⚠️ Keine maxMeanPower-Daten vorhanden');
+    }
+
     setStatus('Analyse erfolgreich abgeschlossen.', 'success');
   } catch (error) {
     console.error(error);
@@ -124,9 +137,15 @@ function renderSummary(fileName, summary) {
 }
 
 function displayMaxMeanPower(mmp) {
-  // Beispiel: In einem eigenen Panel oder im Detail-Bereich
+  console.log('🟢 displayMaxMeanPower called with:', mmp);
+
   const container = document.getElementById('maxMeanPowerPanel');
-  if (!container) return;
+  console.log('🟢 container element:', container);
+
+  if (!container) {
+    console.error('❌ maxMeanPowerPanel not found in DOM!');
+    return;
+  }
 
   const html = Object.entries(mmp)
     .sort((a, b) => {
@@ -134,7 +153,7 @@ function displayMaxMeanPower(mmp) {
       const durB = parseDuration(b[0]);
       return durA - durB;
     })
-    .map(([label, data]) => 
+    .map(([label, data]) =>
       `<div class="metric-card">
          <span>${label}</span>
          <strong>${data.watts} W</strong>
@@ -142,6 +161,7 @@ function displayMaxMeanPower(mmp) {
     )
     .join('');
 
+  console.log('🟢 generated HTML:', html);
   container.innerHTML = html;
 }
 
@@ -159,6 +179,9 @@ function handleReset() {
   resetVisuals();
   rangePanel.style.display = 'none';
   currentRecords = [];
+  const mmpPanel = document.getElementById('maxMeanPowerPanel');
+  if (mmpPanel) mmpPanel.innerHTML = '';
+
   setStatus('Ansicht wurde zurückgesetzt.', 'info');
 }
 
