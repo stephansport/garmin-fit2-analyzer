@@ -117,6 +117,37 @@ function renderSummary(fileName, summary) {
   fields.detailGps.textContent = summary.hasGps ? 'Ja' : 'Nein';
   fields.detailPowerAvailable.textContent = summary.hasPower ? 'Ja' : 'Nein';
   fields.detailHrAvailable.textContent = summary.hasHeartRate ? 'Ja' : 'Nein';
+  if (summary.maxMeanPower) {
+    displayMaxMeanPower(summary.maxMeanPower);
+  }
+}
+
+function displayMaxMeanPower(mmp) {
+  // Beispiel: In einem eigenen Panel oder im Detail-Bereich
+  const container = document.getElementById('maxMeanPowerPanel');
+  if (!container) return;
+
+  const html = Object.entries(mmp)
+    .sort((a, b) => {
+      const durA = parseDuration(a[0]);
+      const durB = parseDuration(b[0]);
+      return durA - durB;
+    })
+    .map(([label, data]) => 
+      `<div class="metric-card">
+         <span>${label}</span>
+         <strong>${data.watts} W</strong>
+       </div>`
+    )
+    .join('');
+
+  container.innerHTML = html;
+}
+
+function parseDuration(label) {
+  if (label.endsWith('s')) return parseInt(label);
+  if (label.endsWith('min')) return parseInt(label) * 60;
+  return 0;
 }
 
 function handleReset() {
