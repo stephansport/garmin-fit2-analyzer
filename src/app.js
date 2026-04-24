@@ -88,6 +88,7 @@ async function handleAnalyze() {
     setStatus('Datei wird analysiert ...', 'info');
     analyzeBtn.disabled = true;
     const data = await parseFitFile(file);
+    console.log('maxMeanPower from backend:', data.maxMeanPower);
     const summary = summarizeActivity(data);
     renderSummary(file.name, summary);
     renderMap(data.records || []);
