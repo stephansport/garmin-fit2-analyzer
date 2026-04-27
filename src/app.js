@@ -180,7 +180,6 @@ function handleReset() {
   resetVisuals();
   rangePanel.style.display = 'none';
   currentRecords = [];
-<<<<<<< HEAD
 
   const mmpPanel = document.getElementById('maxMeanPowerPanel');
   if (mmpPanel) mmpPanel.innerHTML = '';
@@ -190,11 +189,6 @@ function handleReset() {
 
   setStatus('Ansicht wurde zurückgesetzt.', 'info');
 
-=======
-  const mmpPanel = document.getElementById('maxMeanPowerPanel');
-  if (mmpPanel) mmpPanel.innerHTML = '';
-
->>>>>>> a8a67a85ece0e084b1e7158410ed37d5ae01cf46
   setStatus('Ansicht wurde zurückgesetzt.', 'info');
 }
 
