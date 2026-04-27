@@ -15,7 +15,8 @@ import {
   getMapInstance,
   getAltitudeChart,
   getLastBounds,
-  highlightMapRange
+  highlightMapRange,
+  highlightAltitudeRange
 } from './charts.js';
 
 
@@ -107,7 +108,9 @@ async function handleAnalyze() {
       displayMaxMeanPower(data.maxMeanPower);
     } else {
       console.warn('⚠️ Keine maxMeanPower-Daten vorhanden');
+      displayMaxMeanPower({});
     }
+
 
     setStatus('Analyse erfolgreich abgeschlossen.', 'success');
   } catch (error) {
@@ -132,39 +135,25 @@ function renderSummary(fileName, summary) {
   fields.detailGps.textContent = summary.hasGps ? 'Ja' : 'Nein';
   fields.detailPowerAvailable.textContent = summary.hasPower ? 'Ja' : 'Nein';
   fields.detailHrAvailable.textContent = summary.hasHeartRate ? 'Ja' : 'Nein';
-  if (summary.maxMeanPower) {
-    displayMaxMeanPower(summary.maxMeanPower);
-  }
 }
 
 function displayMaxMeanPower(mmp) {
-  console.log('🟢 displayMaxMeanPower called with:', mmp);
-
   const container = document.getElementById('maxMeanPowerPanel');
-  console.log('🟢 container element:', container);
+  if (!container) return;
 
-  if (!container) {
-    console.error('❌ maxMeanPowerPanel not found in DOM!');
-    return;
-  }
+  const labels = ['1min', '5min', '10min', '20min', '60min'];
 
-  const html = Object.entries(mmp)
-    .sort((a, b) => {
-      const durA = parseDuration(a[0]);
-      const durB = parseDuration(b[0]);
-      return durA - durB;
-    })
-    .map(([label, data]) =>
-      `<div class="metric-card">
-         <span>${label}</span>
-         <strong>${data.watts} W</strong>
-       </div>`
-    )
-    .join('');
-
-  console.log('🟢 generated HTML:', html);
-  container.innerHTML = html;
+  container.innerHTML = labels.map(label => {
+    const watts = mmp?.[label]?.watts;
+    return `
+      <div class="metric-card">
+        <span>${label}</span>
+        <strong>${Number.isFinite(watts) ? `${watts} W` : '–'}</strong>
+      </div>
+    `;
+  }).join('');
 }
+
 
 function parseDuration(label) {
   if (label.endsWith('s')) return parseInt(label);
@@ -187,7 +176,6 @@ function handleReset() {
   const rangeMmpPanel = document.getElementById('rangeMaxMeanPowerPanel');
   if (rangeMmpPanel) rangeMmpPanel.innerHTML = '';
 
-  setStatus('Ansicht wurde zurückgesetzt.', 'info');
 
   setStatus('Ansicht wurde zurückgesetzt.', 'info');
 }
@@ -198,7 +186,6 @@ function setStatus(message, type) {
 }
 
 function initTheme() {
-  initResizableSplit();
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
 }
@@ -413,19 +400,6 @@ function displayRangeMaxMeanPower(mmp) {
   }).join('');
 }
 
-
-  const html = Object.entries(mmp)
-    .sort((a, b) => parseDuration(a[0]) - parseDuration(b[0]))
-    .map(([label, data]) =>
-      `<div class="metric-card">
-         <span>${label}</span>
-         <strong>${data.watts} W</strong>
-       </div>`
-    )
-    .join('');
-
-  container.innerHTML = html;
-}
 
 
 function highlightAltitudeRange(fromIndex, toIndex) {
