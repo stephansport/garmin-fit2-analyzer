@@ -85,16 +85,30 @@ async function handleAnalyze() {
     return;
   }
 
+  const mmpPanel = document.getElementById('maxMeanPowerPanel');
+  if (mmpPanel) mmpPanel.innerHTML = '';
+
   try {
     setStatus('Datei wird analysiert ...', 'info');
     analyzeBtn.disabled = true;
     const data = await parseFitFile(file);
+    console.log('maxMeanPower from backend:', data.maxMeanPower);
+    console.log('✅ keys:', Object.keys(data.maxMeanPower || {}));
     const summary = summarizeActivity(data);
     renderSummary(file.name, summary);
     renderMap(data.records || []);
     renderAltitudeChart(data.records || []);
     currentRecords = data.records || [];
     initRangeSlider(currentRecords);
+
+    // NEU: maxMeanPower anzeigen
+    if (data.maxMeanPower && Object.keys(data.maxMeanPower).length > 0) {
+      console.log('🔵 Calling displayMaxMeanPower with:', data.maxMeanPower);
+      displayMaxMeanPower(data.maxMeanPower);
+    } else {
+      console.warn('⚠️ Keine maxMeanPower-Daten vorhanden');
+    }
+
     setStatus('Analyse erfolgreich abgeschlossen.', 'success');
   } catch (error) {
     console.error(error);
@@ -118,6 +132,44 @@ function renderSummary(fileName, summary) {
   fields.detailGps.textContent = summary.hasGps ? 'Ja' : 'Nein';
   fields.detailPowerAvailable.textContent = summary.hasPower ? 'Ja' : 'Nein';
   fields.detailHrAvailable.textContent = summary.hasHeartRate ? 'Ja' : 'Nein';
+  if (summary.maxMeanPower) {
+    displayMaxMeanPower(summary.maxMeanPower);
+  }
+}
+
+function displayMaxMeanPower(mmp) {
+  console.log('🟢 displayMaxMeanPower called with:', mmp);
+
+  const container = document.getElementById('maxMeanPowerPanel');
+  console.log('🟢 container element:', container);
+
+  if (!container) {
+    console.error('❌ maxMeanPowerPanel not found in DOM!');
+    return;
+  }
+
+  const html = Object.entries(mmp)
+    .sort((a, b) => {
+      const durA = parseDuration(a[0]);
+      const durB = parseDuration(b[0]);
+      return durA - durB;
+    })
+    .map(([label, data]) =>
+      `<div class="metric-card">
+         <span>${label}</span>
+         <strong>${data.watts} W</strong>
+       </div>`
+    )
+    .join('');
+
+  console.log('🟢 generated HTML:', html);
+  container.innerHTML = html;
+}
+
+function parseDuration(label) {
+  if (label.endsWith('s')) return parseInt(label);
+  if (label.endsWith('min')) return parseInt(label) * 60;
+  return 0;
 }
 
 function handleReset() {
@@ -128,6 +180,7 @@ function handleReset() {
   resetVisuals();
   rangePanel.style.display = 'none';
   currentRecords = [];
+<<<<<<< HEAD
 
   const mmpPanel = document.getElementById('maxMeanPowerPanel');
   if (mmpPanel) mmpPanel.innerHTML = '';
@@ -137,6 +190,11 @@ function handleReset() {
 
   setStatus('Ansicht wurde zurückgesetzt.', 'info');
 
+=======
+  const mmpPanel = document.getElementById('maxMeanPowerPanel');
+  if (mmpPanel) mmpPanel.innerHTML = '';
+
+>>>>>>> a8a67a85ece0e084b1e7158410ed37d5ae01cf46
   setStatus('Ansicht wurde zurückgesetzt.', 'info');
 }
 
