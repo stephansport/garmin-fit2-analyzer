@@ -400,16 +400,19 @@ function displayRangeMaxMeanPower(mmp) {
   const container = document.getElementById('rangeMaxMeanPowerPanel');
   if (!container) return;
 
-  if (!mmp || Object.keys(mmp).length === 0) {
-    container.innerHTML = `
-      <div class="metric-card"><span>1min</span><strong>–</strong></div>
-      <div class="metric-card"><span>5min</span><strong>–</strong></div>
-      <div class="metric-card"><span>10min</span><strong>–</strong></div>
-      <div class="metric-card"><span>20min</span><strong>–</strong></div>
-      <div class="metric-card"><span>60min</span><strong>–</strong></div>
+  const labels = ['1min', '5min', '10min', '20min', '60min'];
+
+  container.innerHTML = labels.map(label => {
+    const watts = mmp?.[label]?.watts;
+    return `
+      <div class="metric-card">
+        <span>${label}</span>
+        <strong>${Number.isFinite(watts) ? `${watts} W` : '–'}</strong>
+      </div>
     `;
-    return;
-  }
+  }).join('');
+}
+
 
   const html = Object.entries(mmp)
     .sort((a, b) => parseDuration(a[0]) - parseDuration(b[0]))
