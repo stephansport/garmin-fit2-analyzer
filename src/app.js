@@ -15,8 +15,7 @@ import {
   getMapInstance,
   getAltitudeChart,
   getLastBounds,
-  highlightMapRange,
-  highlightAltitudeRange
+  highlightMapRange
 } from './charts.js';
 
 
@@ -399,8 +398,6 @@ function displayRangeMaxMeanPower(mmp) {
     `;
   }).join('');
 }
-
-
 
 function highlightAltitudeRange(fromIndex, toIndex) {
   const chart = getAltitudeChart();
