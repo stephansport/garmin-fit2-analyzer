@@ -238,6 +238,27 @@ h2 {
   font-size: 1.05rem;
 }
 
+.range-mmp-grid {
+  grid-template-columns: repeat(5, minmax(80px, 1fr));
+  gap: 0.75rem;
+}
+
+.range-mmp-grid .metric-card {
+  padding: 0.7rem;
+  text-align: center;
+}
+
+.range-mmp-grid .metric-card strong {
+  white-space: nowrap;
+  font-size: 1rem;
+}
+
+@media (max-width: 700px) {
+  .range-mmp-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .file-label {
   display: inline-block;
   margin: 1rem 0 0.5rem;

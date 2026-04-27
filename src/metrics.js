@@ -108,3 +108,65 @@ function average(values) {
   if (!values.length) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
+
+export function computeMaxMeanPower(records, targetDurations = [60, 300, 600, 1200, 3600]) {
+  const powerRecords = records.filter(r => 
+    r.power != null && 
+    r.power > 0 && 
+    r.elapsed_time != null
+  );
+
+  if (powerRecords.length < 2) return {};
+
+  const result = {};
+
+  for (const targetSeconds of targetDurations) {
+    let maxAvg = 0;
+    let bestStartIdx = 0;
+    let bestEndIdx = 0;
+
+    for (let i = 0; i < powerRecords.length; i++) {
+      const startTime = powerRecords[i].elapsed_time;
+      const endTime = startTime + targetSeconds;
+
+      const windowRecords = [];
+      for (let j = i; j < powerRecords.length; j++) {
+        if (powerRecords[j].elapsed_time >= startTime && 
+            powerRecords[j].elapsed_time < endTime) {
+          windowRecords.push(powerRecords[j]);
+        }
+        if (powerRecords[j].elapsed_time >= endTime) break;
+      }
+
+      if (windowRecords.length > 0) {
+        const actualDuration = 
+          windowRecords[windowRecords.length - 1].elapsed_time - 
+          windowRecords[0].elapsed_time;
+
+        if (actualDuration >= targetSeconds * 0.8) {
+          const avgPower = windowRecords.reduce((sum, r) => sum + r.power, 0) / windowRecords.length;
+
+          if (avgPower > maxAvg) {
+            maxAvg = avgPower;
+            bestStartIdx = i;
+            bestEndIdx = i + windowRecords.length - 1;
+          }
+        }
+      }
+    }
+
+    if (maxAvg > 0) {
+      const label = targetSeconds < 60 
+        ? `${targetSeconds}s` 
+        : `${Math.floor(targetSeconds / 60)}min`;
+
+      result[label] = {
+        watts: Math.round(maxAvg),
+        startIndex: bestStartIdx,
+        endIndex: bestEndIdx
+      };
+    }
+  }
+
+  return result;
+}

@@ -5,7 +5,8 @@ import {
   formatDuration,
   formatDistance,
   formatSpeed,
-  formatNumber
+  formatNumber,
+  computeMaxMeanPower
 } from './metrics.js';
 import {
   renderMap,
@@ -127,6 +128,15 @@ function handleReset() {
   resetVisuals();
   rangePanel.style.display = 'none';
   currentRecords = [];
+
+  const mmpPanel = document.getElementById('maxMeanPowerPanel');
+  if (mmpPanel) mmpPanel.innerHTML = '';
+
+  const rangeMmpPanel = document.getElementById('rangeMaxMeanPowerPanel');
+  if (rangeMmpPanel) rangeMmpPanel.innerHTML = '';
+
+  setStatus('Ansicht wurde zurückgesetzt.', 'info');
+
   setStatus('Ansicht wurde zurückgesetzt.', 'info');
 }
 
@@ -324,9 +334,42 @@ function handleRangeChange(records) {
   rangeFields.power.textContent = formatNumber(summary.avgPower, 0, 'W');
   rangeFields.cadence.textContent = formatNumber(summary.avgCadence, 0, 'rpm');
 
+
+  // NEU: MaxMeanPower für den Bereich berechnen
+  const rangeMMP = computeMaxMeanPower(slice);
+  displayRangeMaxMeanPower(rangeMMP);
+
   // Bereich in Chart + Karte hervorheben
   highlightAltitudeRange(from, to);
   highlightMapRange(records, from, to);
+}
+
+function displayRangeMaxMeanPower(mmp) {
+  const container = document.getElementById('rangeMaxMeanPowerPanel');
+  if (!container) return;
+
+  if (!mmp || Object.keys(mmp).length === 0) {
+    container.innerHTML = `
+      <div class="metric-card"><span>1min</span><strong>–</strong></div>
+      <div class="metric-card"><span>5min</span><strong>–</strong></div>
+      <div class="metric-card"><span>10min</span><strong>–</strong></div>
+      <div class="metric-card"><span>20min</span><strong>–</strong></div>
+      <div class="metric-card"><span>60min</span><strong>–</strong></div>
+    `;
+    return;
+  }
+
+  const html = Object.entries(mmp)
+    .sort((a, b) => parseDuration(a[0]) - parseDuration(b[0]))
+    .map(([label, data]) =>
+      `<div class="metric-card">
+         <span>${label}</span>
+         <strong>${data.watts} W</strong>
+       </div>`
+    )
+    .join('');
+
+  container.innerHTML = html;
 }
 
 
