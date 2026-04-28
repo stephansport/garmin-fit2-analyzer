@@ -38,14 +38,11 @@ const rangeTo = document.getElementById('rangeTo');
 const rangeFromLabel = document.getElementById('rangeFromLabel');
 const rangeToLabel = document.getElementById('rangeToLabel');
 const rangeTrackFill = document.getElementById('rangeTrackFill');
-
-const rangeStartSlider = document.getElementById('rangeStart');
-const rangeEndSlider = document.getElementById('rangeEnd');
-const dualSlider = document.getElementById('dualSlider');
-const rangeDragFill = document.getElementById('rangeDragFill');
 const rangeDragOverlay = document.getElementById('rangeDragOverlay');
+
 let rangeDragState = null;
 let currentRecords = [];
+let cursorMarker = null;
 
 const rangeFields = {
   duration: document.getElementById('rangeDuration'),
@@ -57,8 +54,6 @@ const rangeFields = {
   power: document.getElementById('rangePower'),
   cadence: document.getElementById('rangeCadence')
 };
-
-
 
 const fields = {
   metricStart: document.getElementById('metricStart'),
@@ -79,56 +74,27 @@ const fields = {
 analyzeBtn.addEventListener('click', handleAnalyze);
 resetBtn.addEventListener('click', handleReset);
 themeToggle.addEventListener('click', toggleTheme);
+
 initTheme();
 initResizableSplit();
 initMapExpandToggle();
 initMapCenterToggle();
 
 /* -------------------------------------------------------------------------- */
-/*   Range-Scheduling (Performance)                                           */
+/*   Range Scheduling                                                         */
 /* -------------------------------------------------------------------------- */
 
-let pendingRangeFrame = 0;
-let pendingRangeState = null;
-
-function scheduleRangeUpdate() {
-  if (!currentRecords.length) return;
-
-  pendingRangeState = {
-    fromKm: Number(rangeStartSlider?.value ?? 0),
-    toKm: Number(rangeEndSlider?.value ?? 0)
-  };
-
-  if (pendingRangeFrame) return;
-
-  pendingRangeFrame = requestAnimationFrame(() => {
-    pendingRangeFrame = 0;
-    const state = pendingRangeState;
-    if (!state || !currentRecords.length) return;
-    runRangeUpdate(state.fromKm, state.toKm);
-  });
-}
-
 let pendingRangeFrameId = 0;
-let pendingRange = null;
+let pendingRangeVisual = null;
+let pendingRangeStats = null;
+let rangeStatsDebounceId = 0;
 
-function scheduleRangeEffects(fromIndex, toIndex, records) {
-  pendingRange = { fromIndex, toIndex, records };
-
-  if (pendingRangeFrameId) return;
-
-  pendingRangeFrameId = requestAnimationFrame(() => {
-    pendingRangeFrameId = 0;
-    if (!pendingRange) return;
-
-    const { fromIndex, toIndex, records } = pendingRange;
-    pendingRange = null;
-
-    applyRangeEffects(fromIndex, toIndex, records);
-  });
+function applyRangeVisuals(fromIndex, toIndex, records) {
+  highlightAltitudeRange(fromIndex, toIndex);
+  highlightMapRange(records, fromIndex, toIndex);
 }
 
-function applyRangeEffects(fromIndex, toIndex, records) {
+function applyRangeStats(fromIndex, toIndex, records) {
   const slice = records.slice(fromIndex, toIndex + 1);
   if (!slice.length) return;
 
@@ -146,279 +112,41 @@ function applyRangeEffects(fromIndex, toIndex, records) {
 
   const rangeMMP = computeMaxMeanPower(slice);
   displayRangeMaxMeanPower(rangeMMP);
-
-  highlightAltitudeRange(fromIndex, toIndex);
-  highlightMapRange(records, fromIndex, toIndex);
 }
 
-/**
- * Führt die eigentliche Bereichs-Aktualisierung aus:
- * - Bereichs-Metriken
- * - Bereichs-MMP
- * - Chart-/Karten-Highlight
- */
-function runRangeUpdate(fromKm, toKm) {
-  if (!currentRecords.length) return;
+function scheduleRangeVisuals(fromIndex, toIndex, records) {
+  pendingRangeVisual = { fromIndex, toIndex, records };
 
-  const maxKm = getActivityTotalDistanceKm();
-  if (maxKm <= 0) return;
+  if (pendingRangeFrameId) return;
 
-  let from = Math.max(0, Math.min(fromKm, maxKm));
-  let to = Math.max(0, Math.min(toKm, maxKm));
-  if (from > to) [from, to] = [to, from];
+  pendingRangeFrameId = requestAnimationFrame(() => {
+    pendingRangeFrameId = 0;
+    if (!pendingRangeVisual) return;
 
-  const startDistance = currentRecords[0]?.distance ?? 0;
-  const endDistance = currentRecords[currentRecords.length - 1]?.distance ?? startDistance;
-  const distSpan = Math.max(endDistance - startDistance, 1);
+    const { fromIndex, toIndex, records } = pendingRangeVisual;
+    pendingRangeVisual = null;
 
-  const toIndex = Math.max(
-    0,
-    Math.min(
-      currentRecords.length - 1,
-      Math.round(((to * 1000 - startDistance) / distSpan) * (currentRecords.length - 1))
-    )
-  );
-  const fromIndex = Math.max(
-    0,
-    Math.min(
-      toIndex,
-      Math.round(((from * 1000 - startDistance) / distSpan) * (currentRecords.length - 1))
-    )
-  );
+    applyRangeVisuals(fromIndex, toIndex, records);
+  });
+}
 
-  console.log('RangeUpdate km → idx', { fromKm: from, toKm: to, fromIndex, toIndex });
+function scheduleRangeStats(fromIndex, toIndex, records) {
+  pendingRangeStats = { fromIndex, toIndex, records };
 
-  const slice = currentRecords.slice(fromIndex, toIndex + 1);
-  if (!slice.length) return;
-
-  const summary = summarizeRange(slice);
-  if (summary) {
-    rangeFields.duration.textContent = formatDuration(summary.durationSeconds);
-    rangeFields.distance.textContent = formatDistance(summary.distance);
-    rangeFields.speed.textContent = formatSpeed(summary.avgSpeed);
-    rangeFields.hr.textContent = formatNumber(summary.avgHeartRate, 0, 'bpm');
-    rangeFields.ascent.textContent = formatNumber(summary.totalAscent, 0, 'm');
-    rangeFields.descent.textContent = formatNumber(summary.totalDescent, 0, 'm');
-    rangeFields.power.textContent = formatNumber(summary.avgPower, 0, 'W');
-    rangeFields.cadence.textContent = formatNumber(summary.avgCadence, 0, 'rpm');
+  if (rangeStatsDebounceId) {
+    clearTimeout(rangeStatsDebounceId);
   }
 
-  const rangeMMP = computeMaxMeanPower(slice);
-  displayRangeMaxMeanPower(rangeMMP);
+  rangeStatsDebounceId = setTimeout(() => {
+    rangeStatsDebounceId = 0;
+    if (!pendingRangeStats) return;
 
-  highlightAltitudeRange(fromIndex, toIndex);
-  highlightMapRange(currentRecords, fromIndex, toIndex);
+    const { fromIndex, toIndex, records } = pendingRangeStats;
+    pendingRangeStats = null;
+
+    applyRangeStats(fromIndex, toIndex, records);
+  }, 180);
 }
-
-/* -------------------------------------------------------------------------- */
-/*   Distanz-Helfer                                                           */
-/* -------------------------------------------------------------------------- */
-
-function getActivityTotalDistanceKm() {
-  if (window.currentActivitySummary?.totalDistanceKm != null) {
-    return Number(window.currentActivitySummary.totalDistanceKm) || 0;
-  }
-  if (window.currentActivity?.summary?.totalDistanceKm != null) {
-    return Number(window.currentActivity.summary.totalDistanceKm) || 0;
-  }
-  if (window.activityData?.summary?.totalDistanceKm != null) {
-    return Number(window.activityData.summary.totalDistanceKm) || 0;
-  }
-  if (Array.isArray(currentRecords) && currentRecords.length) {
-    const last = currentRecords[currentRecords.length - 1];
-    return Number(last?.distance ?? 0) / 1000 || 0;
-  }
-  return Number(rangeEndSlider?.max || 0);
-}
-
-/* -------------------------------------------------------------------------- */
-/*   Dual-Slider + verschiebbarer Bereich                                     */
-/* -------------------------------------------------------------------------- */
-
-function clampRangeValues() {
-  const max = getActivityTotalDistanceKm();
-  let start = Number(rangeStartSlider.value);
-  let end = Number(rangeEndSlider.value);
-
-  if (Number.isNaN(start)) start = 0;
-  if (Number.isNaN(end)) end = 0;
-
-  start = Math.max(0, Math.min(start, max));
-  end = Math.max(0, Math.min(end, max));
-
-  if (start > end) {
-    const tmp = start;
-    start = end;
-    end = tmp;
-  }
-
-  rangeStartSlider.value = start.toFixed(2);
-  rangeEndSlider.value = end.toFixed(2);
-}
-
-function updateRangeSliderUi() {
-  const max = Math.max(getActivityTotalDistanceKm(), 0.0001);
-  const start = Number(rangeStartSlider.value);
-  const end = Number(rangeEndSlider.value);
-
-  const startPct = (start / max) * 100;
-  const endPct = (end / max) * 100;
-
-  rangeFromLabel.textContent = `Von: ${start.toFixed(2)} km`;
-  rangeToLabel.textContent = `Bis: ${end.toFixed(2)} km`;
-
-  if (rangeDragFill) {
-    rangeDragFill.style.left = `${startPct}%`;
-    rangeDragFill.style.width = `${Math.max(endPct - startPct, 0)}%`;
-  }
-}
-
-function setRange(startKm, endKm) {
-  const max = getActivityTotalDistanceKm();
-  let start = Math.max(0, Math.min(startKm, max));
-  let end = Math.max(0, Math.min(endKm, max));
-
-  if (start > end) {
-    [start, end] = [end, start];
-  }
-
-  rangeStartSlider.value = start.toFixed(2);
-  rangeEndSlider.value = end.toFixed(2);
-
-  updateRangeSliderUi();
-  scheduleRangeUpdate();
-}
-
-function shiftSelectedRange(deltaKm) {
-  const max = getActivityTotalDistanceKm();
-  const min = 0;
-
-  const from = Number(rangeStartSlider.value);
-  const to = Number(rangeEndSlider.value);
-  const size = to - from;
-
-  if (size <= 0 || max <= 0) return;
-
-  let nextFrom = from + deltaKm;
-  nextFrom = Math.max(min, Math.min(nextFrom, max - size));
-
-  const nextTo = nextFrom + size;
-
-  rangeStartSlider.value = nextFrom.toFixed(2);
-  rangeEndSlider.value = nextTo.toFixed(2);
-
-  updateRangeSliderUi();
-  scheduleRangeUpdate();
-}
-
-function syncRangeSliderBounds() {
-  if (!rangeStartSlider || !rangeEndSlider) return;
-
-  const max = getActivityTotalDistanceKm();
-  rangeStartSlider.min = '0';
-  rangeStartSlider.max = max.toFixed(2);
-  rangeEndSlider.min = '0';
-  rangeEndSlider.max = max.toFixed(2);
-
-  clampRangeValues();
-  updateRangeSliderUi();
-}
-
-function initializeRangeSelection() {
-  if (!rangeStartSlider || !rangeEndSlider) return;
-  syncRangeSliderBounds();
-
-  const max = getActivityTotalDistanceKm();
-  if (max > 0) {
-    setRange(0, max);
-  }
-}
-
-function onRangeStartInput() {
-  let start = Number(rangeStartSlider.value);
-  let end = Number(rangeEndSlider.value);
-
-  if (start > end) {
-    rangeEndSlider.value = start.toFixed(2);
-    end = start;
-  }
-
-  updateRangeSliderUi();
-  scheduleRangeUpdate();
-}
-
-function onRangeEndInput() {
-  let start = Number(rangeStartSlider.value);
-  let end = Number(rangeEndSlider.value);
-
-  if (end < start) {
-    rangeStartSlider.value = end.toFixed(2);
-    start = end;
-  }
-
-  updateRangeSliderUi();
-  scheduleRangeUpdate();
-}
-
-function beginRangeDrag(event) {
-  if (!rangeDragFill || !dualSlider) return;
-  if (getActivityTotalDistanceKm() <= 0) return;
-
-  event.preventDefault();
-
-  const rect = dualSlider.getBoundingClientRect();
-  const startX = event.clientX;
-  const startRangeStart = Number(rangeStartSlider.value);
-
-  rangeDragState = {
-    pointerId: event.pointerId,
-    rectLeft: rect.left,
-    rectWidth: rect.width,
-    startX,
-    startRangeStart
-  };
-
-  rangeDragFill.classList.add('is-dragging');
-  rangeDragFill.setPointerCapture(event.pointerId);
-}
-
-function moveRangeDrag(event) {
-  if (!rangeDragState) return;
-  if (event.pointerId !== rangeDragState.pointerId) return;
-
-  const max = getActivityTotalDistanceKm();
-  if (max <= 0) return;
-
-  const dx = event.clientX - rangeDragState.startX;
-  const deltaKm = (dx / rangeDragState.rectWidth) * max;
-  const currentStart = Number(rangeStartSlider.value);
-  const intendedDelta = (rangeDragState.startRangeStart + deltaKm) - currentStart;
-
-  shiftSelectedRange(intendedDelta);
-}
-
-function endRangeDrag(event) {
-  if (!rangeDragState) return;
-  if (event.pointerId !== rangeDragState.pointerId) return;
-
-  rangeDragFill.classList.remove('is-dragging');
-
-  try {
-    rangeDragFill.releasePointerCapture(event.pointerId);
-  } catch (_) {
-    // ignore
-  }
-
-  rangeDragState = null;
-}
-
-rangeStartSlider?.addEventListener('input', onRangeStartInput);
-rangeEndSlider?.addEventListener('input', onRangeEndInput);
-rangeDragFill?.addEventListener('pointerdown', beginRangeDrag);
-rangeDragFill?.addEventListener('pointermove', moveRangeDrag);
-rangeDragFill?.addEventListener('pointerup', endRangeDrag);
-rangeDragFill?.addEventListener('pointercancel', endRangeDrag);
-rangeDragFill?.addEventListener('lostpointercapture', endRangeDrag);
 
 /* -------------------------------------------------------------------------- */
 /*   Analyse / Summary / MMP                                                  */
@@ -450,7 +178,6 @@ async function handleAnalyze() {
     currentRecords = data.records || [];
 
     initRangeSlider(currentRecords);
-    // initializeRangeSelection();
 
     if (data.maxMeanPower && Object.keys(data.maxMeanPower).length > 0) {
       console.log('🔵 Calling displayMaxMeanPower with:', data.maxMeanPower);
@@ -530,9 +257,24 @@ function handleReset() {
   Object.values(fields).forEach(field => {
     field.textContent = '–';
   });
+
+  Object.values(rangeFields).forEach(field => {
+    field.textContent = '–';
+  });
+
+  positionLabel.textContent = '0.00 km';
+  rangeFromLabel.textContent = 'Von: 0.00 km';
+  rangeToLabel.textContent = 'Bis: 0.00 km';
+
   resetVisuals();
   rangePanel.style.display = 'none';
   currentRecords = [];
+  cursorMarker = null;
+
+  if (rangeTrackFill) {
+    rangeTrackFill.style.left = '0%';
+    rangeTrackFill.style.width = '0%';
+  }
 
   const mmpPanel = document.getElementById('maxMeanPowerPanel');
   if (mmpPanel) mmpPanel.innerHTML = '';
@@ -595,14 +337,10 @@ function initResizableSplit() {
     splitPanel.style.gridTemplateColumns = `${leftWidth}px ${handleWidth}px ${rightWidth}px`;
 
     const map = getMapInstance();
-    if (map) {
-      map.invalidateSize(false);
-    }
+    if (map) map.invalidateSize(false);
 
     const chart = getAltitudeChart();
-    if (chart) {
-      chart.resize();
-    }
+    if (chart) chart.resize();
   });
 
   window.addEventListener('mouseup', () => {
@@ -658,53 +396,31 @@ function initMapCenterToggle() {
 }
 
 /* -------------------------------------------------------------------------- */
-/*   Index-basierter Range-Slider (rangeFrom/rangeTo)                         */
+/*   Index-basierter Range-Slider                                             */
 /* -------------------------------------------------------------------------- */
 
 function initRangeSlider(records) {
   if (!records.length) return;
 
-  const max = records.length - 1;
+  const maxIndex = records.length - 1;
+
   rangeFrom.min = 0;
-  rangeFrom.max = max;
+  rangeFrom.max = maxIndex;
   rangeTo.min = 0;
-  rangeTo.max = max;
+  rangeTo.max = maxIndex;
 
-  const initialWindow = Math.max(200, Math.round(max * 0.2)); // 20 % oder mind. 200 Punkte
-  rangeFrom.value = 0;
-  rangeTo.value = Math.min(max, initialWindow);
+  const initialWindow = Math.max(200, Math.round(maxIndex * 0.2));
+  rangeFrom.value = '0';
+  rangeTo.value = String(Math.min(maxIndex, initialWindow));
 
-  // Live-Feedback beim Ziehen
   rangeFrom.oninput = () => handleRangeChange(records);
   rangeTo.oninput = () => handleRangeChange(records);
 
   rangeFrom.onchange = () => finalizeRangeChange(records);
   rangeTo.onchange = () => finalizeRangeChange(records);
 
-  function finalizeRangeChange(records) {
-    let from = parseInt(rangeFrom.value, 10);
-    let to = parseInt(rangeTo.value, 10);
-    if (from > to) [from, to] = [to, from];
-
-    applyRangeVisualsFinal(from, to, records);
-    applyRangeStats(from, to, records);
-  }
-
-  // Optional: Stats/MMP nur beim Loslassen hart aktualisieren
-  rangeFrom.onchange = () => {
-    const from = parseInt(rangeFrom.value, 10);
-    const to = parseInt(rangeTo.value, 10);
-    applyRangeStats(Math.min(from, to), Math.max(from, to), records);
-  };
-  rangeTo.onchange = () => {
-    const from = parseInt(rangeFrom.value, 10);
-    const to = parseInt(rangeTo.value, 10);
-    applyRangeStats(Math.min(from, to), Math.max(from, to), records);
-  };
-
   rangePanel.style.display = '';
 
-  const maxIndex = records.length - 1;
   positionIndex.min = 0;
   positionIndex.max = maxIndex;
   positionIndex.value = 0;
@@ -716,17 +432,30 @@ function initRangeSlider(records) {
     updatePositionCursor(records, idx);
   };
 
-  // initialer Bereich
   handleRangeChange(records);
-
-  // NEU: Drag-Overlay initialisieren
   initRangeDragOverlay(records);
+}
+
+function finalizeRangeChange(records) {
+  let from = parseInt(rangeFrom.value, 10);
+  let to = parseInt(rangeTo.value, 10);
+
+  if (from > to) [from, to] = [to, from];
+
+  applyRangeVisuals(from, to, records);
+  applyRangeStats(from, to, records);
 }
 
 function initRangeDragOverlay(records) {
   if (!rangeDragOverlay || !records.length) return;
 
-  rangeDragOverlay.addEventListener('pointerdown', (event) => {
+  rangeDragOverlay.onpointerdown = null;
+  rangeDragOverlay.onpointermove = null;
+  rangeDragOverlay.onpointerup = null;
+  rangeDragOverlay.onpointercancel = null;
+  rangeDragOverlay.onlostpointercapture = null;
+
+  rangeDragOverlay.onpointerdown = (event) => {
     const maxIndex = parseInt(rangeTo.max, 10);
     if (!Number.isFinite(maxIndex)) return;
 
@@ -744,9 +473,9 @@ function initRangeDragOverlay(records) {
     };
 
     rangeDragOverlay.classList.add('is-dragging');
-  });
+  };
 
-  rangeDragOverlay.addEventListener('pointermove', (event) => {
+  rangeDragOverlay.onpointermove = (event) => {
     if (!rangeDragState || event.pointerId !== rangeDragState.pointerId) return;
 
     const { rectWidth, startX, startFrom, startTo, maxIndex } = rangeDragState;
@@ -775,153 +504,51 @@ function initRangeDragOverlay(records) {
     rangeTo.value = String(nextTo);
 
     handleRangeChange(records);
-  });
+  };
 
   const endDrag = (event) => {
     if (!rangeDragState || event.pointerId !== rangeDragState.pointerId) return;
+
     rangeDragState = null;
     rangeDragOverlay.classList.remove('is-dragging');
+
     try {
       rangeDragOverlay.releasePointerCapture(event.pointerId);
-    } catch (_) { }
+    } catch (_) {}
   };
 
-  rangeDragOverlay.addEventListener('pointerup', endDrag);
-  rangeDragOverlay.addEventListener('pointercancel', endDrag);
-  rangeDragOverlay.addEventListener('lostpointercapture', endDrag);
-}
-
-function sampleRecordsRange(records, fromIndex, toIndex, targetPoints = 800) {
-  const sliceLength = toIndex - fromIndex + 1;
-  if (sliceLength <= targetPoints) {
-    return { sampled: records.slice(fromIndex, toIndex + 1), sampledFrom: fromIndex, sampledTo: toIndex };
-  }
-
-  const step = sliceLength / (targetPoints - 1);
-  const sampled = [];
-
-  for (let i = 0; i < targetPoints; i++) {
-    const idx = Math.min(toIndex, fromIndex + Math.round(i * step));
-    sampled.push(records[idx]);
-  }
-
-  return { sampled, sampledFrom: fromIndex, sampledTo: toIndex };
-}
-
-function applyRangeVisualsLive(fromIndex, toIndex, records) {
-  highlightAltitudeRange(fromIndex, toIndex);
-
-  const { sampled } = sampleRecordsRange(records, fromIndex, toIndex, 700);
-  highlightMapRange(sampled, 0, sampled.length - 1);
-}
-
-function applyRangeVisualsFinal(fromIndex, toIndex, records) {
-  highlightAltitudeRange(fromIndex, toIndex);
-  highlightMapRange(records, fromIndex, toIndex);
-}
-
-// Range-Update Scheduler
-let pendingRangeVisual = null;
-let pendingRangeStats = null;
-let rangeStatsDebounceId = 0;
-
-// Live-Visuelles Update: Chart + Karte
-function applyRangeVisuals(fromIndex, toIndex, records) {
-  highlightAltitudeRange(fromIndex, toIndex);
-  highlightMapRange(records, fromIndex, toIndex);
-}
-
-// Schwere Stats-Berechnungen: Metriken + MMP
-function applyRangeStats(fromIndex, toIndex, records) {
-  const slice = records.slice(fromIndex, toIndex + 1);
-  if (!slice.length) return;
-
-  const summary = summarizeRange(slice);
-  if (summary) {
-    rangeFields.duration.textContent = formatDuration(summary.durationSeconds);
-    rangeFields.distance.textContent = formatDistance(summary.distance);
-    rangeFields.speed.textContent = formatSpeed(summary.avgSpeed);
-    rangeFields.hr.textContent = formatNumber(summary.avgHeartRate, 0, 'bpm');
-    rangeFields.ascent.textContent = formatNumber(summary.totalAscent, 0, 'm');
-    rangeFields.descent.textContent = formatNumber(summary.totalDescent, 0, 'm');
-    rangeFields.power.textContent = formatNumber(summary.avgPower, 0, 'W');
-    rangeFields.cadence.textContent = formatNumber(summary.avgCadence, 0, 'rpm');
-  }
-
-  const rangeMMP = computeMaxMeanPower(slice);
-  displayRangeMaxMeanPower(rangeMMP);
-}
-
-// nur die visuellen Effekte pro Frame
-function scheduleRangeVisuals(fromIndex, toIndex, records) {
-  pendingRangeVisual = { fromIndex, toIndex, records };
-
-  if (pendingRangeFrameId) return;
-
-  pendingRangeFrameId = requestAnimationFrame(() => {
-    pendingRangeFrameId = 0;
-    if (!pendingRangeVisual) return;
-
-    const { fromIndex, toIndex, records } = pendingRangeVisual;
-    pendingRangeVisual = null;
-
-    applyRangeVisuals(fromIndex, toIndex, records);
-  });
-}
-
-// Stats/MMP mit Debounce (z.B. 200 ms nach letzter Änderung)
-function scheduleRangeStats(fromIndex, toIndex, records) {
-  pendingRangeStats = { fromIndex, toIndex, records };
-
-  if (rangeStatsDebounceId) {
-    clearTimeout(rangeStatsDebounceId);
-  }
-
-  rangeStatsDebounceId = setTimeout(() => {
-    rangeStatsDebounceId = 0;
-    if (!pendingRangeStats) return;
-
-    const { fromIndex, toIndex, records } = pendingRangeStats;
-    pendingRangeStats = null;
-
-    applyRangeStats(fromIndex, toIndex, records);
-  }, 200); // ggf. anpassen (150–300 ms)
+  rangeDragOverlay.onpointerup = endDrag;
+  rangeDragOverlay.onpointercancel = endDrag;
+  rangeDragOverlay.onlostpointercapture = endDrag;
 }
 
 function handleRangeChange(records) {
   let from = parseInt(rangeFrom.value, 10);
   let to = parseInt(rangeTo.value, 10);
 
-  // Thumbs dürfen sich nicht überlappen
   if (from > to) {
     if (document.activeElement === rangeFrom) {
-      rangeFrom.value = to;
+      rangeFrom.value = String(to);
       from = to;
     } else {
-      rangeTo.value = from;
+      rangeTo.value = String(from);
       to = from;
     }
   }
 
-  console.log('RangeChange', { from, to, len: records.length });
-
   const max = records.length - 1;
+  if (max <= 0) return;
 
-  // Farbige Track-Füllung zwischen den Thumbs
   rangeTrackFill.style.left = `${(from / max) * 100}%`;
   rangeTrackFill.style.width = `${((to - from) / max) * 100}%`;
 
-  // Labels
-  const dFrom = records[from].distance;
-  const dTo = records[to].distance;
+  const dFrom = records[from]?.distance;
+  const dTo = records[to]?.distance;
 
   rangeFromLabel.textContent = `Von: ${dFrom != null ? (dFrom / 1000).toFixed(2) + ' km' : '–'}`;
   rangeToLabel.textContent = `Bis: ${dTo != null ? (dTo / 1000).toFixed(2) + ' km' : '–'}`;
 
-  // Live: nur visuelle Effekte (Chart & Karte) pro Frame
   scheduleRangeVisuals(from, to, records);
-
-  // „schwere“ Stats & MMP leicht verzögert
   scheduleRangeStats(from, to, records);
 }
 
@@ -950,8 +577,6 @@ function highlightAltitudeRange(fromIndex, toIndex) {
 
   chart.update('none');
 }
-
-let cursorMarker = null;
 
 function updateMapCursor(records, index) {
   const mapInstance = getMapInstance();
@@ -1013,20 +638,8 @@ function safeSetText(id, text) {
 }
 
 function updatePointStats(r) {
-  safeSetText(
-    'pointHr',
-    r.heart_rate != null ? `${r.heart_rate} bpm` : '–'
-  );
-  safeSetText(
-    'pointAltitude',
-    Number.isFinite(r.altitude) ? `${r.altitude.toFixed(1)} m` : '–'
-  );
-  safeSetText(
-    'pointSpeed',
-    Number.isFinite(r.speed) ? `${(r.speed * 3.6).toFixed(1)} km/h` : '–'
-  );
-  safeSetText(
-    'pointPower',
-    r.power != null ? `${r.power} W` : '–'
-  );
+  safeSetText('pointHr', r.heart_rate != null ? `${r.heart_rate} bpm` : '–');
+  safeSetText('pointAltitude', Number.isFinite(r.altitude) ? `${r.altitude.toFixed(1)} m` : '–');
+  safeSetText('pointSpeed', Number.isFinite(r.speed) ? `${(r.speed * 3.6).toFixed(1)} km/h` : '–');
+  safeSetText('pointPower', r.power != null ? `${r.power} W` : '–');
 }
