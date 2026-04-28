@@ -665,8 +665,14 @@ function initRangeSlider(records) {
   if (!records.length) return;
 
   const max = records.length - 1;
-  rangeFrom.min = 0; rangeFrom.max = max; rangeFrom.value = 0;
-  rangeTo.min = 0; rangeTo.max = max; rangeTo.value = max;
+  rangeFrom.min = 0;
+  rangeFrom.max = max;
+  rangeTo.min = 0;
+  rangeTo.max = max;
+
+  const initialWindow = Math.max(200, Math.round(max * 0.2)); // 20 % oder mind. 200 Punkte
+  rangeFrom.value = 0;
+  rangeTo.value = Math.min(max, initialWindow);
 
   // Live-Feedback beim Ziehen
   rangeFrom.oninput = () => handleRangeChange(records);
@@ -744,29 +750,30 @@ function initRangeDragOverlay(records) {
     if (!rangeDragState || event.pointerId !== rangeDragState.pointerId) return;
 
     const { rectWidth, startX, startFrom, startTo, maxIndex } = rangeDragState;
+    if (rectWidth <= 0) return;
+
     const dx = event.clientX - startX;
+    const deltaIndex = Math.round((dx / rectWidth) * maxIndex);
 
-    const total = maxIndex;
-    const sliceLength = startTo - startFrom;
-    if (sliceLength <= 0 || rectWidth <= 0) return;
-
-    const deltaIndex = Math.round((dx / rectWidth) * total);
+    const size = startTo - startFrom;
+    if (size <= 0 || size >= maxIndex) return;
 
     let nextFrom = startFrom + deltaIndex;
     let nextTo = startTo + deltaIndex;
 
     if (nextFrom < 0) {
       nextFrom = 0;
-      nextTo = sliceLength;
-    } else if (nextTo > maxIndex) {
-      nextTo = maxIndex;
-      nextFrom = maxIndex - sliceLength;
+      nextTo = size;
     }
 
-    rangeFrom.value = nextFrom;
-    rangeTo.value = nextTo;
+    if (nextTo > maxIndex) {
+      nextTo = maxIndex;
+      nextFrom = maxIndex - size;
+    }
 
-    // normale Range-Logik wiederverwenden
+    rangeFrom.value = String(nextFrom);
+    rangeTo.value = String(nextTo);
+
     handleRangeChange(records);
   });
 
@@ -776,7 +783,7 @@ function initRangeDragOverlay(records) {
     rangeDragOverlay.classList.remove('is-dragging');
     try {
       rangeDragOverlay.releasePointerCapture(event.pointerId);
-    } catch (_) {}
+    } catch (_) { }
   };
 
   rangeDragOverlay.addEventListener('pointerup', endDrag);
