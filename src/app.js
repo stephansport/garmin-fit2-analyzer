@@ -268,8 +268,9 @@ function shiftSelectedRange(deltaKm) {
 }
 
 function syncRangeSliderBounds() {
-  const max = getActivityTotalDistanceKm();
+  if (!rangeStartSlider || !rangeEndSlider) return;
 
+  const max = getActivityTotalDistanceKm();
   rangeStartSlider.min = '0';
   rangeStartSlider.max = max.toFixed(2);
   rangeEndSlider.min = '0';
@@ -280,8 +281,7 @@ function syncRangeSliderBounds() {
 }
 
 function initializeRangeSelection() {
-  if (!currentRecords.length) return;
-
+  if (!rangeStartSlider || !rangeEndSlider) return;
   syncRangeSliderBounds();
 
   const max = getActivityTotalDistanceKm();
@@ -406,7 +406,7 @@ async function handleAnalyze() {
     currentRecords = data.records || [];
 
     initRangeSlider(currentRecords);
-    initializeRangeSelection();
+    // initializeRangeSelection();
 
     if (data.maxMeanPower && Object.keys(data.maxMeanPower).length > 0) {
       console.log('🔵 Calling displayMaxMeanPower with:', data.maxMeanPower);
