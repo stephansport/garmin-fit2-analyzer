@@ -274,16 +274,7 @@ export function renderAltitudeChart(records) {
     data: {
       labels,
       datasets: [
-        {
-          label: 'Höhe (m)',
-          data: altitudeData,
-          borderColor: '#0b6b75',
-          backgroundColor: 'rgba(11, 107, 117, 0.08)',
-          borderWidth: 2,
-          pointRadius: 0,
-          tension: 0.18,
-          fill: false
-        },
+        // 1. Ausgewählter Bereich (Basisfläche)
         {
           label: 'Ausgewählter Bereich',
           data: rangeData,
@@ -292,13 +283,14 @@ export function renderAltitudeChart(records) {
           borderWidth: 2,
           pointRadius: 0,
           tension: 0.18,
-          fill: true
+          fill: 'origin'
         },
+        // 2–6. MMP-Fills (liegen über dem Bereich, unter der Hauptlinie)
         {
           label: 'MMP 60min',
           data: new Array(altitudeData.length).fill(null),
           borderColor: '#3b82f6',
-          backgroundColor: 'rgba(59, 130, 246, 0.12)',
+          backgroundColor: 'rgba(59, 130, 246, 0.18)',
           borderWidth: 0,
           pointRadius: 0,
           tension: 0.18,
@@ -308,7 +300,7 @@ export function renderAltitudeChart(records) {
           label: 'MMP 20min',
           data: new Array(altitudeData.length).fill(null),
           borderColor: '#22c55e',
-          backgroundColor: 'rgba(34, 197, 94, 0.12)',
+          backgroundColor: 'rgba(34, 197, 94, 0.18)',
           borderWidth: 0,
           pointRadius: 0,
           tension: 0.18,
@@ -318,7 +310,7 @@ export function renderAltitudeChart(records) {
           label: 'MMP 10min',
           data: new Array(altitudeData.length).fill(null),
           borderColor: '#eab308',
-          backgroundColor: 'rgba(234, 179, 8, 0.12)',
+          backgroundColor: 'rgba(234, 179, 8, 0.18)',
           borderWidth: 0,
           pointRadius: 0,
           tension: 0.18,
@@ -328,7 +320,7 @@ export function renderAltitudeChart(records) {
           label: 'MMP 5min',
           data: new Array(altitudeData.length).fill(null),
           borderColor: '#f97316',
-          backgroundColor: 'rgba(249, 115, 22, 0.14)',
+          backgroundColor: 'rgba(249, 115, 22, 0.22)',
           borderWidth: 0,
           pointRadius: 0,
           tension: 0.18,
@@ -338,12 +330,24 @@ export function renderAltitudeChart(records) {
           label: 'MMP 1min',
           data: new Array(altitudeData.length).fill(null),
           borderColor: '#ef4444',
-          backgroundColor: 'rgba(239, 68, 68, 0.16)',
+          backgroundColor: 'rgba(239, 68, 68, 0.26)',
           borderWidth: 0,
           pointRadius: 0,
           tension: 0.18,
           fill: 'origin'
         },
+        // 7. Haupt-Höhenlinie (liegt oben auf allen Flächen)
+        {
+          label: 'Höhe (m)',
+          data: altitudeData,
+          borderColor: '#0b6b75',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.18,
+          fill: false
+        },
+        // 8. Cursor
         {
           label: 'Position',
           data: cursorData,
@@ -412,21 +416,20 @@ export function renderAltitudeChart(records) {
 export function setAltitudeRangeMmpFills(markers) {
   if (!altitudeChart) return;
 
-  const source = altitudeChart.data.datasets[0]?.data || [];
+  const source = altitudeChart.data.datasets[6]?.data || []; // Höhe (m)
   const datasets = altitudeChart.data.datasets;
 
   const map = {
-    '60min': 2,
-    '20min': 3,
-    '10min': 4,
-    '5min': 5,
-    '1min': 6
+    '60min': 1,
+    '20min': 2,
+    '10min': 3,
+    '5min': 4,
+    '1min': 5
   };
 
   for (const [key, datasetIndex] of Object.entries(map)) {
     const ds = datasets[datasetIndex];
     const marker = markers?.[key];
-
     if (!ds) continue;
 
     if (!marker || !Number.isFinite(marker.startIndex) || !Number.isFinite(marker.endIndex)) {
@@ -445,10 +448,11 @@ export function setAltitudeRangeMmpFills(markers) {
 export function clearAltitudeRangeMmpFills() {
   if (!altitudeChart) return;
 
-  [2, 3, 4, 5, 6].forEach(index => {
+  const sourceLen = altitudeChart.data.datasets[6]?.data.length || 0;
+
+  [1, 2, 3, 4, 5].forEach(index => {
     if (altitudeChart.data.datasets[index]) {
-      altitudeChart.data.datasets[index].data =
-        new Array(altitudeChart.data.datasets[0].data.length).fill(null);
+      altitudeChart.data.datasets[index].data = new Array(sourceLen).fill(null);
     }
   });
 
