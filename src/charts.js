@@ -4,6 +4,7 @@ let trackLine = null;
 let highlightLine = null;
 let lastBounds = null;
 let altitudeRangeMmpMarkers = {};
+let mmpOverlayLines = [];
 
 const rangeMmpPlugin = {
   id: 'rangeMmpPlugin',
@@ -101,6 +102,67 @@ const rangeMmpPlugin = {
   }
 };
 
+export function highlightMapMmpRanges(records, markers) {
+  if (!mapInstance) return;
+
+  mmpOverlayLines.forEach(line => line.remove());
+  mmpOverlayLines = [];
+
+  const order = ['60min', '20min', '10min', '5min', '1min'];
+  const colors = {
+    '1min': '#ef4444',
+    '5min': '#f97316',
+    '10min': '#eab308',
+    '20min': '#22c55e',
+    '60min': '#3b82f6'
+  };
+
+  const weights = {
+    '1min': 8,
+    '5min': 7,
+    '10min': 6,
+    '20min': 5,
+    '60min': 4
+  };
+
+  for (const key of order) {
+    const marker = markers?.[key];
+    if (!marker) continue;
+    if (!Number.isFinite(marker.startIndex) || !Number.isFinite(marker.endIndex)) continue;
+
+    const points = (records || [])
+      .slice(marker.startIndex, marker.endIndex + 1)
+      .filter(r => Number.isFinite(r.position_lat) && Number.isFinite(r.position_long))
+      .map(r => [r.position_lat, r.position_long]);
+
+    if (points.length < 2) continue;
+
+    const line = L.polyline(points, {
+      pane: 'mmpPane',
+      color: colors[key],
+      weight: weights[key],
+      opacity: key === '60min' ? 0.75 : 0.95,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(mapInstance);
+
+    if (Number.isFinite(marker.watts)) {
+      line.bindTooltip(`${key}: ${marker.watts} W`, {
+        sticky: true,
+        direction: 'top',
+        offset: [0, -4]
+      });
+    }
+
+    mmpOverlayLines.push(line);
+  }
+}
+
+export function clearMapMmpRanges() {
+  mmpOverlayLines.forEach(line => line.remove());
+  mmpOverlayLines = [];
+}
+
 export function renderMap(records) {
   const valid = (records || []).filter(
     r => Number.isFinite(r.position_lat) && Number.isFinite(r.position_long)
@@ -108,9 +170,15 @@ export function renderMap(records) {
 
   if (!mapInstance) {
     mapInstance = L.map('map', { preferCanvas: true });
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap-Mitwirkende'
     }).addTo(mapInstance);
+
+    if (!mapInstance.getPane('mmpPane')) {
+      mapInstance.createPane('mmpPane');
+      mapInstance.getPane('mmpPane').style.zIndex = 450;
+    }
   }
 
   if (trackLine) {
@@ -123,6 +191,9 @@ export function renderMap(records) {
     highlightLine = null;
   }
 
+  mmpOverlayLines.forEach(line => line.remove());
+  mmpOverlayLines = [];
+
   if (!valid.length) {
     lastBounds = null;
     mapInstance.setView([47.9978, 7.8421], 10);
@@ -130,6 +201,7 @@ export function renderMap(records) {
   }
 
   const latlngs = valid.map(r => [r.position_lat, r.position_long]);
+
   trackLine = L.polyline(latlngs, {
     color: '#d14b57',
     weight: 4,
@@ -301,6 +373,9 @@ export function resetVisuals() {
     highlightLine.remove();
     highlightLine = null;
   }
+
+  mmpOverlayLines.forEach(line => line.remove());
+  mmpOverlayLines = [];
 
   if (mapInstance) {
     mapInstance.remove();

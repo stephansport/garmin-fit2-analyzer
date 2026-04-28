@@ -17,7 +17,9 @@ import {
   getLastBounds,
   highlightMapRange,
   setAltitudeRangeMmpMarkers,
-  clearAltitudeRangeMmpMarkers
+  clearAltitudeRangeMmpMarkers,
+  highlightMapMmpRanges,
+  clearMapMmpRanges
 } from './charts.js';
 
 const fitFileInput = document.getElementById('fitFile');
@@ -116,7 +118,9 @@ function applyRangeStats(fromIndex, toIndex, records) {
   displayRangeMaxMeanPower(rangeMMP);
 
   const absoluteMarkers = absolutizeRangeMmp(rangeMMP, fromIndex);
+
   setAltitudeRangeMmpMarkers(absoluteMarkers);
+  highlightMapMmpRanges(records, absoluteMarkers);
 }
 
 function absolutizeRangeMmp(rangeMMP, baseIndex) {
@@ -294,6 +298,7 @@ function handleReset() {
 
   resetVisuals();
   clearAltitudeRangeMmpMarkers();
+  clearMapMmpRanges();
 
   rangePanel.style.display = 'none';
   currentRecords = [];
