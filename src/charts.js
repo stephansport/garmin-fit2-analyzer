@@ -42,18 +42,22 @@ const rangeMmpPlugin = {
 
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.5;
-      ctx.setLineDash([5, 4]);
 
+      /* Startlinie: durchgezogen */
+      ctx.setLineDash([]);
       ctx.beginPath();
       ctx.moveTo(x1, chartArea.top);
       ctx.lineTo(x1, chartArea.bottom);
       ctx.stroke();
 
+      /* Endlinie: gestrichelt */
+      ctx.setLineDash([5, 4]);
       ctx.beginPath();
       ctx.moveTo(x2, chartArea.top);
       ctx.lineTo(x2, chartArea.bottom);
       ctx.stroke();
 
+      /* Dash zurücksetzen */
       ctx.setLineDash([]);
 
       const text = `${label}: ${Number.isFinite(marker.watts) ? marker.watts : '–'} W`;
