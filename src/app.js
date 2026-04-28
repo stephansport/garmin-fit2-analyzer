@@ -595,21 +595,19 @@ function highlightAltitudeRange(fromIndex, toIndex) {
   const chart = getAltitudeChart();
   if (!chart) return;
 
-  const mainDataset = chart.data.datasets[0];
-  const rangeDataset = chart.data.datasets[1];
+  const rangeDataset = chart.data.datasets[0]; // Ausgewählter Bereich
+  const mainDataset = chart.data.datasets[6];  // Höhe (m)
+
   if (!mainDataset || !rangeDataset) return;
 
   const src = mainDataset.data;
-  const dst = rangeDataset.data;
+  const dst = new Array(src.length).fill(null);
 
-  if (dst.length !== src.length) {
-    rangeDataset.data = new Array(src.length).fill(null);
+  for (let i = fromIndex; i <= toIndex && i < src.length; i++) {
+    dst[i] = src[i];
   }
 
-  for (let i = 0; i < src.length; i++) {
-    rangeDataset.data[i] = (i >= fromIndex && i <= toIndex) ? src[i] : null;
-  }
-
+  rangeDataset.data = dst;
   chart.update('none');
 }
 
@@ -649,21 +647,18 @@ function updatePositionCursor(records, index) {
   const chart = getAltitudeChart();
   if (!chart) return;
 
-  const mainDataset = chart.data.datasets[0];
-  const cursorDataset = chart.data.datasets[2];
+  const mainDataset = chart.data.datasets[6];   // Höhe (m)
+  const cursorDataset = chart.data.datasets[7]; // Position
   if (!mainDataset || !cursorDataset) return;
 
   const src = mainDataset.data;
-  const dst = cursorDataset.data;
+  const dst = new Array(src.length).fill(null);
 
-  if (dst.length !== src.length) {
-    cursorDataset.data = new Array(src.length).fill(null);
+  if (index >= 0 && index < src.length) {
+    dst[index] = src[index];
   }
 
-  for (let i = 0; i < src.length; i++) {
-    dst[i] = (i === index) ? src[i] : null;
-  }
-
+  cursorDataset.data = dst;
   chart.update('none');
 }
 

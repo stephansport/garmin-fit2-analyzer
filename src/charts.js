@@ -279,8 +279,8 @@ export function renderAltitudeChart(records) {
           label: 'Ausgewählter Bereich',
           data: rangeData,
           borderColor: '#55aab3',
-          backgroundColor: 'rgba(85, 170, 179, 0.18)',
-          borderWidth: 2,
+          backgroundColor: 'rgba(85, 170, 179, 0.22)',
+          borderWidth: 1.5,
           pointRadius: 0,
           tension: 0.18,
           fill: 'origin'
