@@ -60,14 +60,14 @@
         <article class="metric-card"><span>Abstieg</span><strong id="metricDescent">–</strong></article>
       </div>
     </section>
-    
+
     <section class="panel max-mean-power-panel">
       <h2>Beste Leistungen</h2>
       <div id="maxMeanPowerPanel" class="metrics-grid">
         <!-- wird von displayMaxMeanPower befüllt -->
       </div>
     </section>
-    
+
     <!-- Positions-Slider: eigenes Panel, volle Breite -->
     <section class="panel position-panel">
       <div class="position-inner">
@@ -116,42 +116,44 @@
       </div>
     </section>
 
-<!-- Bereichsanalyse -->
-<section class="panel range-panel" id="rangePanel" style="display:none;">
-  <h2>Bereichsanalyse</h2>
+    <!-- Bereichsanalyse -->
+    <section class="panel range-panel" id="rangePanel" style="display:none;">
+      <h2>Bereichsanalyse</h2>
 
-  <div class="range-slider-wrap">
-    <div class="range-labels">
-      <span id="rangeFromLabel">Von: 0.00 km</span>
-      <span id="rangeToLabel">Bis: 0.00 km</span>
-    </div>
-    <div class="dual-slider">
-      <input type="range" id="rangeFrom" class="range-input range-input-from" min="0" max="100" value="0"
-        step="1" />
-      <input type="range" id="rangeTo" class="range-input range-input-to" min="0" max="100" value="100" step="1" />
-      <div class="range-track">
-        <div class="range-track-fill" id="rangeTrackFill"></div>
+      <div class="range-slider-wrap">
+        <div class="range-labels">
+          <span id="rangeFromLabel">Von: 0.00 km</span>
+          <span id="rangeToLabel">Bis: 0.00 km</span>
+        </div>
+
+        <div class="range-track-wrapper">
+          <div class="range-track"></div>
+          <div id="rangeTrackFill" class="range-track-fill"></div>
+          <!-- Overlay für Drag des gesamten Bereichs -->
+          <div id="rangeDragOverlay" class="range-drag-overlay" title="Bereich verschieben"></div>
+
+          <input id="rangeFrom" type="range" min="0" max="0" step="1" value="0" aria-label="Bereich von" />
+
+          <input id="rangeTo" type="range" min="0" max="0" step="1" value="0" aria-label="Bereich bis" />
+        </div>
       </div>
-    </div>
-  </div>
 
-  <div class="range-metrics-grid" id="rangeMetricsGrid">
-    <article class="metric-card"><span>Zeit</span><strong id="rangeDuration">–</strong></article>
-    <article class="metric-card"><span>Distanz</span><strong id="rangeDistance">–</strong></article>
-    <article class="metric-card"><span>Ø Geschwindigkeit</span><strong id="rangeSpeed">–</strong></article>
-    <article class="metric-card"><span>Ø Herzfrequenz</span><strong id="rangeHr">–</strong></article>
-    <article class="metric-card"><span>Anstieg</span><strong id="rangeAscent">–</strong></article>
-    <article class="metric-card"><span>Abstieg</span><strong id="rangeDescent">–</strong></article>
-    <article class="metric-card"><span>Ø Leistung</span><strong id="rangePower">–</strong></article>
-    <article class="metric-card"><span>Ø Kadenz</span><strong id="rangeCadence">–</strong></article>
-  </div>
+      <div class="range-metrics-grid" id="rangeMetricsGrid">
+        <article class="metric-card"><span>Zeit</span><strong id="rangeDuration">–</strong></article>
+        <article class="metric-card"><span>Distanz</span><strong id="rangeDistance">–</strong></article>
+        <article class="metric-card"><span>Ø Geschwindigkeit</span><strong id="rangeSpeed">–</strong></article>
+        <article class="metric-card"><span>Ø Herzfrequenz</span><strong id="rangeHr">–</strong></article>
+        <article class="metric-card"><span>Anstieg</span><strong id="rangeAscent">–</strong></article>
+        <article class="metric-card"><span>Abstieg</span><strong id="rangeDescent">–</strong></article>
+        <article class="metric-card"><span>Ø Leistung</span><strong id="rangePower">–</strong></article>
+        <article class="metric-card"><span>Ø Kadenz</span><strong id="rangeCadence">–</strong></article>
+      </div>
 
-  <!-- NEU: Beste Leistungen im Bereich -->
-  <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Beste Leistungen (Bereich)</h3>
-  <div id="rangeMaxMeanPowerPanel" class="metrics-grid range-mmp-grid">
-    <!-- wird von displayRangeMaxMeanPower befüllt -->
-  </div>
-</section>
+      <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Beste Leistungen (Bereich)</h3>
+      <div id="rangeMaxMeanPowerPanel" class="metrics-grid range-mmp-grid">
+        <!-- wird von displayRangeMaxMeanPower befüllt -->
+      </div>
+    </section>n class="panel range-panel"
 
 
 

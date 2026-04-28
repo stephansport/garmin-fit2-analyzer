@@ -43,6 +43,8 @@ const rangeStartSlider = document.getElementById('rangeStart');
 const rangeEndSlider = document.getElementById('rangeEnd');
 const dualSlider = document.getElementById('dualSlider');
 const rangeDragFill = document.getElementById('rangeDragFill');
+const rangeDragOverlay = document.getElementById('rangeDragOverlay');
+let rangeDragState = null;
 
 const rangeFields = {
   duration: document.getElementById('rangeDuration'),
@@ -710,6 +712,76 @@ function initRangeSlider(records) {
 
   // initialer Bereich
   handleRangeChange(records);
+
+  // NEU: Drag-Overlay initialisieren
+  initRangeDragOverlay(records);
+}
+
+function initRangeDragOverlay(records) {
+  if (!rangeDragOverlay || !records.length) return;
+
+  rangeDragOverlay.addEventListener('pointerdown', (event) => {
+    const maxIndex = parseInt(rangeTo.max, 10);
+    if (!Number.isFinite(maxIndex)) return;
+
+    const rect = rangeDragOverlay.getBoundingClientRect();
+
+    rangeDragOverlay.setPointerCapture(event.pointerId);
+
+    rangeDragState = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      rectWidth: rect.width,
+      startFrom: parseInt(rangeFrom.value, 10),
+      startTo: parseInt(rangeTo.value, 10),
+      maxIndex
+    };
+
+    rangeDragOverlay.classList.add('is-dragging');
+  });
+
+  rangeDragOverlay.addEventListener('pointermove', (event) => {
+    if (!rangeDragState || event.pointerId !== rangeDragState.pointerId) return;
+
+    const { rectWidth, startX, startFrom, startTo, maxIndex } = rangeDragState;
+    const dx = event.clientX - startX;
+
+    const total = maxIndex;
+    const sliceLength = startTo - startFrom;
+    if (sliceLength <= 0 || rectWidth <= 0) return;
+
+    const deltaIndex = Math.round((dx / rectWidth) * total);
+
+    let nextFrom = startFrom + deltaIndex;
+    let nextTo = startTo + deltaIndex;
+
+    if (nextFrom < 0) {
+      nextFrom = 0;
+      nextTo = sliceLength;
+    } else if (nextTo > maxIndex) {
+      nextTo = maxIndex;
+      nextFrom = maxIndex - sliceLength;
+    }
+
+    rangeFrom.value = nextFrom;
+    rangeTo.value = nextTo;
+
+    // normale Range-Logik wiederverwenden
+    handleRangeChange(records);
+  });
+
+  const endDrag = (event) => {
+    if (!rangeDragState || event.pointerId !== rangeDragState.pointerId) return;
+    rangeDragState = null;
+    rangeDragOverlay.classList.remove('is-dragging');
+    try {
+      rangeDragOverlay.releasePointerCapture(event.pointerId);
+    } catch (_) {}
+  };
+
+  rangeDragOverlay.addEventListener('pointerup', endDrag);
+  rangeDragOverlay.addEventListener('pointercancel', endDrag);
+  rangeDragOverlay.addEventListener('lostpointercapture', endDrag);
 }
 
 function sampleRecordsRange(records, fromIndex, toIndex, targetPoints = 800) {

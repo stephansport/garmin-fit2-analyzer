@@ -408,6 +408,68 @@ td:last-child {
   align-items: center;
 }
 
+.range-track-wrapper {
+  position: relative;
+  height: 40px;
+}
+
+.range-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 6px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: #d7dbe3;
+}
+
+.range-track-fill {
+  position: absolute;
+  top: 50%;
+  height: 6px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2d7ff9, #4da3ff);
+}
+
+/* NEU: Overlay für Drag */
+.range-drag-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 18px;
+  transform: translateY(-50%);
+  cursor: grab;
+  /* pointer-events aktiv lassen, aber transparent bleiben */
+  background: transparent;
+  z-index: 2; /* über Track & Fill, unter den Thumbs */
+}
+
+.range-drag-overlay.is-dragging {
+  cursor: grabbing;
+}
+
+/* Range-Inputs liegen ganz oben, damit Thumbs bedienbar bleiben */
+.range-track-wrapper input[type="range"] {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  width: 100%;
+  height: 40px;
+  margin: 0;
+  background: none;
+  pointer-events: none; /* Spur ignoriert Pointer */
+  appearance: none;
+}
+
+.range-track-wrapper input[type="range"]::-webkit-slider-thumb,
+.range-track-wrapper input[type="range"]::-moz-range-thumb {
+  pointer-events: auto; /* nur Thumbs bekommen Events */
+}
+
 .range-track {
   position: absolute;
   left: 0;
