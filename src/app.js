@@ -198,13 +198,9 @@ async function handleAnalyze() {
 
     initRangeSlider(currentRecords);
 
-    if (data.maxMeanPower && Object.keys(data.maxMeanPower).length > 0) {
-      console.log('🔵 Calling displayMaxMeanPower with:', data.maxMeanPower);
-      displayMaxMeanPower(data.maxMeanPower);
-    } else {
-      console.warn('⚠️ Keine maxMeanPower-Daten vorhanden');
-      displayMaxMeanPower({});
-    }
+    const fullMmp = computeMaxMeanPower(currentRecords);
+    console.log('🔵 Frontend maxMeanPower:', fullMmp);
+    displayMaxMeanPower(fullMmp);
 
     setStatus('Analyse erfolgreich abgeschlossen.', 'success');
   } catch (error) {
@@ -214,6 +210,17 @@ async function handleAnalyze() {
     analyzeBtn.disabled = false;
   }
 }
+
+function mmpToWattsOnly(mmp) {
+  const out = {};
+  for (const [key, value] of Object.entries(mmp || {})) {
+    out[key] = value?.watts ?? null;
+  }
+  return out;
+}
+
+console.log('backend mmp:', mmpToWattsOnly(data.maxMeanPower));
+console.log('frontend mmp:', mmpToWattsOnly(computeMaxMeanPower(currentRecords)));
 
 function renderSummary(fileName, summary) {
   fields.metricStart.textContent = summary.startTime
@@ -534,7 +541,7 @@ function initRangeDragOverlay(records) {
 
     try {
       rangeDragOverlay.releasePointerCapture(event.pointerId);
-    } catch (_) {}
+    } catch (_) { }
 
     finalizeRangeChange(records);
   };
