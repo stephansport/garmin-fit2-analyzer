@@ -302,7 +302,7 @@ export function renderAltitudeChart(records) {
           borderWidth: 0,
           pointRadius: 0,
           tension: 0.18,
-          fill: true
+          fill: 'origin'
         },
         {
           label: 'MMP 20min',
@@ -312,7 +312,7 @@ export function renderAltitudeChart(records) {
           borderWidth: 0,
           pointRadius: 0,
           tension: 0.18,
-          fill: true
+          fill: 'origin'
         },
         {
           label: 'MMP 10min',
@@ -322,7 +322,7 @@ export function renderAltitudeChart(records) {
           borderWidth: 0,
           pointRadius: 0,
           tension: 0.18,
-          fill: true
+          fill: 'origin'
         },
         {
           label: 'MMP 5min',
@@ -332,7 +332,7 @@ export function renderAltitudeChart(records) {
           borderWidth: 0,
           pointRadius: 0,
           tension: 0.18,
-          fill: true
+          fill: 'origin'
         },
         {
           label: 'MMP 1min',
@@ -342,7 +342,7 @@ export function renderAltitudeChart(records) {
           borderWidth: 0,
           pointRadius: 0,
           tension: 0.18,
-          fill: true
+          fill: 'origin'
         },
         {
           label: 'Position',
@@ -407,6 +407,52 @@ export function renderAltitudeChart(records) {
     },
     plugins: [rangeMmpPlugin]
   });
+}
+
+export function setAltitudeRangeMmpFills(markers) {
+  if (!altitudeChart) return;
+
+  const source = altitudeChart.data.datasets[0]?.data || [];
+  const datasets = altitudeChart.data.datasets;
+
+  const map = {
+    '60min': 2,
+    '20min': 3,
+    '10min': 4,
+    '5min': 5,
+    '1min': 6
+  };
+
+  for (const [key, datasetIndex] of Object.entries(map)) {
+    const ds = datasets[datasetIndex];
+    const marker = markers?.[key];
+
+    if (!ds) continue;
+
+    if (!marker || !Number.isFinite(marker.startIndex) || !Number.isFinite(marker.endIndex)) {
+      ds.data = new Array(source.length).fill(null);
+      continue;
+    }
+
+    ds.data = source.map((value, index) =>
+      index >= marker.startIndex && index <= marker.endIndex ? value : null
+    );
+  }
+
+  altitudeChart.update('none');
+}
+
+export function clearAltitudeRangeMmpFills() {
+  if (!altitudeChart) return;
+
+  [2, 3, 4, 5, 6].forEach(index => {
+    if (altitudeChart.data.datasets[index]) {
+      altitudeChart.data.datasets[index].data =
+        new Array(altitudeChart.data.datasets[0].data.length).fill(null);
+    }
+  });
+
+  altitudeChart.update('none');
 }
 
 export function setAltitudeRangeMmpMarkers(markers) {
