@@ -18,6 +18,8 @@ import {
   highlightMapRange,
   setAltitudeRangeMmpMarkers,
   clearAltitudeRangeMmpMarkers,
+  setAltitudeRangeMmpFills,
+  clearAltitudeRangeMmpFills,
   highlightMapMmpRanges,
   clearMapMmpRanges
 } from './charts.js';
@@ -223,9 +225,6 @@ function mmpToWattsOnly(mmp) {
   }
   return out;
 }
-
-console.log('backend mmp:', mmpToWattsOnly(data.maxMeanPower));
-console.log('frontend mmp:', mmpToWattsOnly(computeMaxMeanPower(currentRecords)));
 
 function renderSummary(fileName, summary) {
   fields.metricStart.textContent = summary.startTime
