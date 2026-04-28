@@ -45,6 +45,7 @@ const dualSlider = document.getElementById('dualSlider');
 const rangeDragFill = document.getElementById('rangeDragFill');
 const rangeDragOverlay = document.getElementById('rangeDragOverlay');
 let rangeDragState = null;
+let currentRecords = [];
 
 const rangeFields = {
   duration: document.getElementById('rangeDuration'),
@@ -57,8 +58,7 @@ const rangeFields = {
   cadence: document.getElementById('rangeCadence')
 };
 
-let currentRecords = [];
-let rangeDragState = null;
+
 
 const fields = {
   metricStart: document.getElementById('metricStart'),
