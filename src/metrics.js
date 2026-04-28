@@ -1,9 +1,75 @@
+export function summarizeActivity(data) {
+  const records = data?.records || [];
+  const validRecords = records.filter(Boolean);
+
+  const first = validRecords[0];
+  const last = validRecords[validRecords.length - 1];
+
+  const distanceMeters = Number(data?.summary?.totalDistance ?? last?.distance ?? 0);
+  const durationSeconds = Number(data?.summary?.totalTimerTime ?? 0)
+    || deriveDurationSeconds(first?.timestamp, last?.timestamp);
+
+  const avgHeartRate = average(validRecords.map(r => toFinite(r.heart_rate)));
+  const avgPower = average(validRecords.map(r => toFinite(r.power)));
+  const avgSpeed = durationSeconds > 0 ? distanceMeters / durationSeconds : average(validRecords.map(r => toFinite(r.speed)));
+
+  const { ascent, descent } = computeElevationGain(validRecords);
+
+  return {
+    startTime: first?.timestamp || null,
+    durationSeconds,
+    distance: distanceMeters,
+    avgSpeed: Number.isFinite(avgSpeed) ? avgSpeed : null,
+    avgHeartRate: Number.isFinite(avgHeartRate) ? avgHeartRate : null,
+    avgPower: Number.isFinite(avgPower) ? avgPower : null,
+    totalAscent: ascent,
+    totalDescent: descent,
+    recordCount: validRecords.length,
+    hasGps: validRecords.some(r => Number.isFinite(r.position_lat) && Number.isFinite(r.position_long)),
+    hasPower: validRecords.some(r => Number.isFinite(r.power)),
+    hasHeartRate: validRecords.some(r => Number.isFinite(r.heart_rate))
+  };
+}
+
+export function summarizeRange(records) {
+  const validRecords = (records || []).filter(Boolean);
+  if (!validRecords.length) return null;
+
+  const first = validRecords[0];
+  const last = validRecords[validRecords.length - 1];
+
+  const startDistance = Number(first?.distance ?? 0);
+  const endDistance = Number(last?.distance ?? startDistance);
+  const distance = Math.max(0, endDistance - startDistance);
+
+  const durationSeconds = deriveDurationSeconds(first?.timestamp, last?.timestamp);
+  const avgSpeed = durationSeconds > 0 ? distance / durationSeconds : average(validRecords.map(r => toFinite(r.speed)));
+  const avgHeartRate = average(validRecords.map(r => toFinite(r.heart_rate)));
+  const avgPower = average(validRecords.map(r => toFinite(r.power)));
+  const avgCadence = average(validRecords.map(r => toFinite(r.cadence)));
+
+  const { ascent, descent } = computeElevationGain(validRecords);
+
+  return {
+    durationSeconds,
+    distance,
+    avgSpeed: Number.isFinite(avgSpeed) ? avgSpeed : null,
+    avgHeartRate: Number.isFinite(avgHeartRate) ? avgHeartRate : null,
+    avgPower: Number.isFinite(avgPower) ? avgPower : null,
+    avgCadence: Number.isFinite(avgCadence) ? avgCadence : null,
+    totalAscent: ascent,
+    totalDescent: descent
+  };
+}
+
 export function formatDuration(totalSeconds) {
-  if (!Number.isFinite(totalSeconds)) return '–';
-  const sec = Math.round(totalSeconds);
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return '–';
+
+  const seconds = Math.round(totalSeconds);
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+
   return [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
 }
 
@@ -19,154 +85,120 @@ export function formatSpeed(ms) {
 
 export function formatNumber(value, digits = 0, unit = '') {
   if (!Number.isFinite(value)) return '–';
-  return `${value.toFixed(digits)}${unit ? ` ${unit}` : ''}`;
+  const n = Number(value).toFixed(digits);
+  return unit ? `${n} ${unit}` : n;
 }
 
-export function summarizeActivity(data) {
-  const records = Array.isArray(data.records) ? data.records : [];
-  const hrValues = records.map(r => r.heart_rate).filter(Number.isFinite);
-  const powerValues = records.map(r => r.power).filter(Number.isFinite);
-  const altitudeValues = records.map(r => r.altitude).filter(Number.isFinite);
+export function computeMaxMeanPower(records) {
+  const windows = [
+    { key: '1min', seconds: 60 },
+    { key: '5min', seconds: 300 },
+    { key: '10min', seconds: 600 },
+    { key: '20min', seconds: 1200 },
+    { key: '60min', seconds: 3600 }
+  ];
 
-  let totalDescent = null;
-  if (altitudeValues.length > 1) {
-    let descent = 0;
-    for (let i = 1; i < altitudeValues.length; i += 1) {
-      const diff = altitudeValues[i] - altitudeValues[i - 1];
-      if (diff < 0) descent += Math.abs(diff);
+  const result = {};
+  for (const { key, seconds } of windows) {
+    result[key] = computeBestPowerWindow(records, seconds);
+  }
+  return result;
+}
+
+function computeBestPowerWindow(records, targetSeconds) {
+  const list = (records || []).filter(r => r && r.timestamp);
+  if (!list.length) {
+    return { watts: null, startIndex: null, endIndex: null };
+  }
+
+  let bestAvg = null;
+  let bestStart = null;
+  let bestEnd = null;
+
+  let sum = 0;
+  let right = 0;
+
+  for (let left = 0; left < list.length; left++) {
+    const leftTime = toMs(list[left].timestamp);
+    if (!Number.isFinite(leftTime)) continue;
+
+    while (right < list.length) {
+      const rightTime = toMs(list[right].timestamp);
+      if (!Number.isFinite(rightTime)) break;
+
+      const elapsed = (rightTime - leftTime) / 1000;
+      if (elapsed >= targetSeconds) break;
+
+      sum += Number.isFinite(list[right].power) ? list[right].power : 0;
+      right++;
     }
-    totalDescent = descent;
+
+    const rightBoundaryTime = right < list.length ? toMs(list[right].timestamp) : NaN;
+    const coveredSeconds = Number.isFinite(rightBoundaryTime)
+      ? (rightBoundaryTime - leftTime) / 1000
+      : ((toMs(list[list.length - 1].timestamp) - leftTime) / 1000);
+
+    if (coveredSeconds >= targetSeconds && right > left) {
+      const count = right - left;
+      const avg = count > 0 ? sum / count : null;
+
+      if (Number.isFinite(avg) && (bestAvg == null || avg > bestAvg)) {
+        bestAvg = avg;
+        bestStart = left;
+        bestEnd = right - 1;
+      }
+    }
+
+    sum -= Number.isFinite(list[left].power) ? list[left].power : 0;
+    if (right < left + 1) right = left + 1;
   }
 
   return {
-    startTime: data.startTime || null,
-    durationSeconds: Number.isFinite(data.totalDuration) ? data.totalDuration : Number.isFinite(data.totalDurationMs) ? data.totalDurationMs / 1000 : null,
-    distance: data.totalDistance ?? null,
-    avgSpeed: data.avgSpeed ?? average(records.map(r => r.speed).filter(Number.isFinite)),
-    avgHeartRate: average(hrValues),
-    avgPower: average(powerValues),
-    totalAscent: data.totalAscent ?? null,
-    totalDescent,
-    recordCount: records.length,
-    hasGps: records.some(r => Number.isFinite(r.position_lat) && Number.isFinite(r.position_long)),
-    hasPower: powerValues.length > 0,
-    hasHeartRate: hrValues.length > 0
+    watts: Number.isFinite(bestAvg) ? Math.round(bestAvg) : null,
+    startIndex: bestStart,
+    endIndex: bestEnd
   };
 }
 
-export function summarizeRange(records) {
-  if (!records || records.length < 2) return null;
-
-  const first = records[0];
-  const last  = records[records.length - 1];
-
-  const startTs = first.timestamp ? new Date(first.timestamp).getTime() : null;
-  const endTs   = last.timestamp  ? new Date(last.timestamp).getTime()  : null;
-  const durationSeconds = (startTs && endTs)
-    ? Math.round((endTs - startTs) / 1000)
-    : null;
-
-  const distStart = first.distance ?? null;
-  const distEnd   = last.distance  ?? null;
-  const distance  = (distStart !== null && distEnd !== null)
-    ? distEnd - distStart
-    : null;
-
-  const avg = arr =>
-    arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
-
-  const hrValues    = records.map(r => r.heart_rate).filter(v => typeof v === 'number' && v > 0);
-  const speedValues = records.map(r => r.speed).filter(v => typeof v === 'number' && v > 0);
-  const powerValues = records.map(r => r.power).filter(v => typeof v === 'number' && v > 0);
-  const cadValues   = records.map(r => r.cadence).filter(v => typeof v === 'number' && v > 0);
-
+function computeElevationGain(records) {
   let ascent = 0;
   let descent = 0;
+
   for (let i = 1; i < records.length; i++) {
-    const prev = records[i - 1].altitude;
-    const curr = records[i].altitude;
-    if (typeof prev === 'number' && typeof curr === 'number') {
-      const diff = curr - prev;
-      if (diff > 0) ascent  += diff;
-      else          descent += Math.abs(diff);
-    }
+    const prev = toFinite(records[i - 1]?.altitude);
+    const curr = toFinite(records[i]?.altitude);
+    if (!Number.isFinite(prev) || !Number.isFinite(curr)) continue;
+
+    const delta = curr - prev;
+    if (delta > 0) ascent += delta;
+    if (delta < 0) descent += Math.abs(delta);
   }
 
   return {
-    durationSeconds,
-    distance,
-    avgSpeed:     avg(speedValues),
-    avgHeartRate: avg(hrValues),
-    avgPower:     avg(powerValues),
-    avgCadence:   avg(cadValues),
-    totalAscent:  Math.round(ascent),
-    totalDescent: Math.round(descent)
+    ascent: Math.round(ascent),
+    descent: Math.round(descent)
   };
 }
 
 function average(values) {
-  if (!values.length) return null;
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
+  const finite = values.filter(Number.isFinite);
+  if (!finite.length) return null;
+  const sum = finite.reduce((acc, value) => acc + value, 0);
+  return sum / finite.length;
 }
 
-export function computeMaxMeanPower(records, targetDurations = [60, 300, 600, 1200, 3600]) {
-  const powerRecords = records.filter(r => 
-    r.power != null && 
-    r.power > 0 && 
-    r.elapsed_time != null
-  );
+function deriveDurationSeconds(startTs, endTs) {
+  const start = toMs(startTs);
+  const end = toMs(endTs);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 0;
+  return Math.round((end - start) / 1000);
+}
 
-  if (powerRecords.length < 2) return {};
+function toMs(value) {
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : NaN;
+}
 
-  const result = {};
-
-  for (const targetSeconds of targetDurations) {
-    let maxAvg = 0;
-    let bestStartIdx = 0;
-    let bestEndIdx = 0;
-
-    for (let i = 0; i < powerRecords.length; i++) {
-      const startTime = powerRecords[i].elapsed_time;
-      const endTime = startTime + targetSeconds;
-
-      const windowRecords = [];
-      for (let j = i; j < powerRecords.length; j++) {
-        if (powerRecords[j].elapsed_time >= startTime && 
-            powerRecords[j].elapsed_time < endTime) {
-          windowRecords.push(powerRecords[j]);
-        }
-        if (powerRecords[j].elapsed_time >= endTime) break;
-      }
-
-      if (windowRecords.length > 0) {
-        const actualDuration = 
-          windowRecords[windowRecords.length - 1].elapsed_time - 
-          windowRecords[0].elapsed_time;
-
-        if (actualDuration >= targetSeconds * 0.8) {
-          const avgPower = windowRecords.reduce((sum, r) => sum + r.power, 0) / windowRecords.length;
-
-          if (avgPower > maxAvg) {
-            maxAvg = avgPower;
-            bestStartIdx = i;
-            bestEndIdx = i + windowRecords.length - 1;
-          }
-        }
-      }
-    }
-
-    if (maxAvg > 0) {
-      const label = targetSeconds < 60 
-        ? `${targetSeconds}s` 
-        : `${Math.floor(targetSeconds / 60)}min`;
-
-      result[label] = {
-        watts: Math.round(maxAvg),
-        startIndex: bestStartIdx,
-        endIndex: bestEndIdx
-      };
-    }
-  }
-
-  return result;
+function toFinite(value) {
+  return Number.isFinite(value) ? value : null;
 }

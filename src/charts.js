@@ -1,221 +1,340 @@
-
-let altitudeChartInstance = null;
 let mapInstance = null;
-let trackLayer = null;
+let altitudeChart = null;
+let trackLine = null;
+let highlightLine = null;
 let lastBounds = null;
-let rangeLayer = null;      // neu
-let rangeStartMarker = null;
-let rangeEndMarker = null;
+let altitudeRangeMmpMarkers = {};
 
-const altitudeRangePlugin = {
-  id: 'altitudeRangePlugin',
-  beforeDraw(chart, args, options) {
-    const range = chart.options.plugins && chart.options.plugins.rangeSelection;
-    if (!range) return;
-
-    const { fromIndex, toIndex } = range;
-    if (fromIndex == null || toIndex == null) return;
-
-    const xScale = chart.scales.x;
-    const yScale = chart.scales.y;
-    if (!xScale || !yScale) return;
+const rangeMmpPlugin = {
+  id: 'rangeMmpPlugin',
+  afterDatasetsDraw(chart) {
+    const markers = altitudeRangeMmpMarkers;
+    if (!markers || !Object.keys(markers).length) return;
 
     const ctx = chart.ctx;
+    const xScale = chart.scales.x;
+    const yScale = chart.scales.y;
+    const chartArea = chart.chartArea;
+    if (!xScale || !yScale || !chartArea) return;
 
-    const left = xScale.getPixelForValue(fromIndex);
-    const right = xScale.getPixelForValue(toIndex);
-    const top = yScale.top;
-    const bottom = yScale.bottom;
+    const palette = {
+      '1min': '#ef4444',
+      '5min': '#f97316',
+      '10min': '#eab308',
+      '20min': '#22c55e',
+      '60min': '#3b82f6'
+    };
 
     ctx.save();
-    ctx.fillStyle = 'rgba(11, 107, 117, 0.08)'; // var(--primary) mit leichter Transparenz
-    ctx.fillRect(left, top, right - left, bottom - top);
+    ctx.font = '12px Inter, sans-serif';
+    ctx.textBaseline = 'middle';
+
+    const placedLabels = [];
+
+    for (const [label, marker] of Object.entries(markers)) {
+      if (!marker) continue;
+      if (!Number.isFinite(marker.startIndex) || !Number.isFinite(marker.endIndex)) continue;
+
+      const x1 = xScale.getPixelForValue(marker.startIndex);
+      const x2 = xScale.getPixelForValue(marker.endIndex);
+      const color = palette[label] || '#ffffff';
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+
+      ctx.beginPath();
+      ctx.moveTo(x1, chartArea.top);
+      ctx.lineTo(x1, chartArea.bottom);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(x2, chartArea.top);
+      ctx.lineTo(x2, chartArea.bottom);
+      ctx.stroke();
+
+      ctx.setLineDash([]);
+
+      const text = `${label}: ${Number.isFinite(marker.watts) ? marker.watts : '–'} W`;
+      const paddingX = 6;
+      const boxHeight = 18;
+      const textWidth = ctx.measureText(text).width;
+      const boxWidth = textWidth + paddingX * 2;
+
+      let labelX = x1 + 6;
+      if (labelX + boxWidth > chartArea.right) {
+        labelX = chartArea.right - boxWidth - 4;
+      }
+      if (labelX < chartArea.left + 4) {
+        labelX = chartArea.left + 4;
+      }
+
+      let labelY = chartArea.top + 12;
+
+      for (const placed of placedLabels) {
+        const overlapsX = !(labelX + boxWidth < placed.x || labelX > placed.x + placed.w);
+        const overlapsY = Math.abs(labelY - placed.y) < 20;
+        if (overlapsX && overlapsY) {
+          labelY += 20;
+        }
+      }
+
+      if (labelY + boxHeight > chartArea.bottom - 4) {
+        labelY = chartArea.bottom - boxHeight - 4;
+      }
+
+      ctx.fillStyle = 'rgba(17, 22, 28, 0.78)';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+
+      roundRect(ctx, labelX, labelY - boxHeight / 2, boxWidth, boxHeight, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(text, labelX + paddingX, labelY);
+
+      placedLabels.push({ x: labelX, y: labelY, w: boxWidth });
+    }
+
     ctx.restore();
   }
 };
 
-// Chart ist global über das Script-Tag vorhanden
-Chart.register(altitudeRangePlugin);
-
-export function getMapInstance() {
-  return mapInstance;
-}
-
-export function getAltitudeChart() {
-  return altitudeChartInstance;
-}
-
-export function getLastBounds() {
-  return lastBounds;
-}
-
 export function renderMap(records) {
-  const points = records
-    .filter(r => Number.isFinite(r.position_lat) && Number.isFinite(r.position_long))
-    .map(r => [r.position_lat, r.position_long]);
+  const valid = (records || []).filter(
+    r => Number.isFinite(r.position_lat) && Number.isFinite(r.position_long)
+  );
 
   if (!mapInstance) {
-    mapInstance = L.map('map');
+    mapInstance = L.map('map', { preferCanvas: true });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap-Mitwirkende'
     }).addTo(mapInstance);
   }
 
-  if (trackLayer) {
-    trackLayer.remove();
-    trackLayer = null;
+  if (trackLine) {
+    trackLine.remove();
+    trackLine = null;
   }
 
-  if (!points.length) {
-    mapInstance.setView([48.0, 8.0], 6);
+  if (highlightLine) {
+    highlightLine.remove();
+    highlightLine = null;
+  }
+
+  if (!valid.length) {
     lastBounds = null;
+    mapInstance.setView([47.9978, 7.8421], 10);
     return;
   }
 
-  trackLayer = L.polyline(points, {
-    color: '#d64550',
+  const latlngs = valid.map(r => [r.position_lat, r.position_long]);
+  trackLine = L.polyline(latlngs, {
+    color: '#d14b57',
     weight: 4,
     opacity: 0.9
   }).addTo(mapInstance);
 
-  lastBounds = trackLayer.getBounds(); // neu: Bounds merken
+  lastBounds = trackLine.getBounds();
   mapInstance.fitBounds(lastBounds, { padding: [20, 20] });
 }
 
+export function highlightMapRange(records, fromIndex, toIndex) {
+  if (!mapInstance) return;
+
+  if (highlightLine) {
+    highlightLine.remove();
+    highlightLine = null;
+  }
+
+  console.log('mapRange', { fromIndex, toIndex });
+
+  const points = (records || [])
+    .slice(fromIndex, toIndex + 1)
+    .filter(r => Number.isFinite(r.position_lat) && Number.isFinite(r.position_long))
+    .map(r => [r.position_lat, r.position_long]);
+
+  console.log('points length', points.length);
+
+  if (points.length < 2) return;
+
+  highlightLine = L.polyline(points, {
+    color: '#0b6b75',
+    weight: 5,
+    opacity: 0.95
+  }).addTo(mapInstance);
+}
 
 export function renderAltitudeChart(records) {
   const canvas = document.getElementById('altitudeChart');
   if (!canvas) return;
 
-  const labels = records.map(r =>
-    Number.isFinite(r.distance) ? (r.distance / 1000).toFixed(2) : ''
-  );
-  const values = records.map(r =>
-    Number.isFinite(r.altitude) ? r.altitude : null
-  );
-
-  if (altitudeChartInstance) {
-    altitudeChartInstance.destroy();
+  if (altitudeChart) {
+    altitudeChart.destroy();
+    altitudeChart = null;
   }
 
-  altitudeChartInstance = new Chart(canvas, {
+  const labels = (records || []).map(r => {
+    const distKm = Number.isFinite(r.distance) ? r.distance / 1000 : null;
+    return distKm != null ? distKm.toFixed(2) : '';
+  });
+
+  const altitudeData = (records || []).map(r =>
+    Number.isFinite(r.altitude) ? Number(r.altitude.toFixed(1)) : null
+  );
+
+  const rangeData = new Array(altitudeData.length).fill(null);
+  const cursorData = new Array(altitudeData.length).fill(null);
+
+  altitudeChart = new Chart(canvas, {
     type: 'line',
     data: {
       labels,
       datasets: [
         {
           label: 'Höhe (m)',
-          data: values,
+          data: altitudeData,
           borderColor: '#0b6b75',
-          backgroundColor: 'rgba(11, 107, 117, 0.12)',
-          fill: true,
-          tension: 0.18,
+          backgroundColor: 'rgba(11, 107, 117, 0.08)',
+          borderWidth: 2,
           pointRadius: 0,
-          order: 1
+          tension: 0.18,
+          fill: false
         },
         {
           label: 'Ausgewählter Bereich',
-          data: new Array(values.length).fill(null),
-          borderColor: 'rgba(11, 107, 117, 0)',
-          backgroundColor: 'rgba(11, 107, 117, 0.22)',
-          fill: true,
-          tension: 0.18,
+          data: rangeData,
+          borderColor: '#55aab3',
+          backgroundColor: 'rgba(85, 170, 179, 0.18)',
+          borderWidth: 2,
           pointRadius: 0,
-          spanGaps: false,
-          order: 0
+          tension: 0.18,
+          fill: true
         },
         {
           label: 'Position',
-          data: new Array(values.length).fill(null),
-          borderColor: 'transparent',
-          backgroundColor: 'transparent',
+          data: cursorData,
+          borderColor: '#2563eb',
+          backgroundColor: '#2563eb',
           pointRadius: 5,
-          pointHoverRadius: 6,
-          pointBackgroundColor: '#2563eb',  // blau, passend zum Map-Cursor
-          pointBorderColor: '#ffffff',
-          pointBorderWidth: 2,
-          showLine: false,                   // nur Punkt, keine Linie
-          order: 2
+          pointHoverRadius: 5,
+          showLine: false
         }
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
+      normalized: true,
+      interaction: {
+        intersect: false,
+        mode: 'index'
+      },
+      plugins: {
+        legend: {
+          labels: {
+            color: '#8fa0b5',
+            boxWidth: 30
+          }
+        },
+        tooltip: {
+          enabled: true
+        }
+      },
       scales: {
-        x: { title: { display: true, text: 'Distanz (km)' } },
-        y: { title: { display: true, text: 'Höhe (m)' } }
+        x: {
+          ticks: {
+            color: '#8fa0b5',
+            maxTicksLimit: 14
+          },
+          title: {
+            display: true,
+            text: 'Distanz (km)',
+            color: '#8fa0b5'
+          },
+          grid: {
+            color: 'rgba(143, 160, 181, 0.08)'
+          }
+        },
+        y: {
+          ticks: {
+            color: '#8fa0b5'
+          },
+          title: {
+            display: true,
+            text: 'Höhe (m)',
+            color: '#8fa0b5'
+          },
+          grid: {
+            color: 'rgba(143, 160, 181, 0.08)'
+          }
+        }
       }
-    }
+    },
+    plugins: [rangeMmpPlugin]
   });
 }
 
-export function resetVisuals() {
-  if (altitudeChartInstance) {
-    altitudeChartInstance.destroy();
-    altitudeChartInstance = null;
-  }
-  if (trackLayer) {
-    trackLayer.remove();
-    trackLayer = null;
-  }
-  if (mapInstance) {
-    mapInstance.setView([48.0, 8.0], 6);
+export function setAltitudeRangeMmpMarkers(markers) {
+  altitudeRangeMmpMarkers = markers || {};
+  if (altitudeChart) {
+    altitudeChart.update('none');
   }
 }
 
-export function highlightMapRange(records, fromIndex, toIndex) {
-  if (!mapInstance || !records.length) return;
-
-  console.log('mapRange', { fromIndex, toIndex });
-
-  // Aufräumen
-  if (rangeLayer) {
-    rangeLayer.remove();
-    rangeLayer = null;
+export function clearAltitudeRangeMmpMarkers() {
+  altitudeRangeMmpMarkers = {};
+  if (altitudeChart) {
+    altitudeChart.update('none');
   }
-  if (rangeStartMarker) {
-    rangeStartMarker.remove();
-    rangeStartMarker = null;
-  }
-  if (rangeEndMarker) {
-    rangeEndMarker.remove();
-    rangeEndMarker = null;
+}
+
+export function resetVisuals() {
+  if (trackLine) {
+    trackLine.remove();
+    trackLine = null;
   }
 
-  if (fromIndex > toIndex) return;
+  if (highlightLine) {
+    highlightLine.remove();
+    highlightLine = null;
+  }
 
-  const slice = records.slice(fromIndex, toIndex + 1);
-  const points = slice
-    .filter(r => Number.isFinite(r.position_lat) && Number.isFinite(r.position_long))
-    .map(r => [r.position_lat, r.position_long]);
+  if (mapInstance) {
+    mapInstance.remove();
+    mapInstance = null;
+  }
 
-  console.log('points length', points.length);
+  if (altitudeChart) {
+    altitudeChart.destroy();
+    altitudeChart = null;
+  }
 
-  if (!points.length) return;
+  altitudeRangeMmpMarkers = {};
+  lastBounds = null;
+}
 
-  rangeLayer = L.polyline(points, {
-    color: '#0b6b75',     // var(--primary)
-    weight: 5,
-    opacity: 0.9
-  }).addTo(mapInstance);
+export function getMapInstance() {
+  return mapInstance;
+}
 
-  const start = points[0];
-  const end = points[points.length - 1];
+export function getAltitudeChart() {
+  return altitudeChart;
+}
 
-  rangeStartMarker = L.circleMarker(start, {
-    radius: 5,
-    color: '#0b6b75',
-    weight: 2,
-    fillColor: '#ffffff',
-    fillOpacity: 1
-  }).addTo(mapInstance);
+export function getLastBounds() {
+  return lastBounds;
+}
 
-  rangeEndMarker = L.circleMarker(end, {
-    radius: 5,
-    color: '#0b6b75',
-    weight: 2,
-    fillColor: '#ffffff',
-    fillOpacity: 1
-  }).addTo(mapInstance);
+function roundRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
 }

@@ -15,7 +15,9 @@ import {
   getMapInstance,
   getAltitudeChart,
   getLastBounds,
-  highlightMapRange
+  highlightMapRange,
+  setAltitudeRangeMmpMarkers,
+  clearAltitudeRangeMmpMarkers
 } from './charts.js';
 
 const fitFileInput = document.getElementById('fitFile');
@@ -112,6 +114,23 @@ function applyRangeStats(fromIndex, toIndex, records) {
 
   const rangeMMP = computeMaxMeanPower(slice);
   displayRangeMaxMeanPower(rangeMMP);
+
+  const absoluteMarkers = absolutizeRangeMmp(rangeMMP, fromIndex);
+  setAltitudeRangeMmpMarkers(absoluteMarkers);
+}
+
+function absolutizeRangeMmp(rangeMMP, baseIndex) {
+  const result = {};
+
+  for (const [key, value] of Object.entries(rangeMMP || {})) {
+    result[key] = {
+      watts: value?.watts ?? null,
+      startIndex: Number.isFinite(value?.startIndex) ? value.startIndex + baseIndex : null,
+      endIndex: Number.isFinite(value?.endIndex) ? value.endIndex + baseIndex : null
+    };
+  }
+
+  return result;
 }
 
 function scheduleRangeVisuals(fromIndex, toIndex, records) {
@@ -267,6 +286,8 @@ function handleReset() {
   rangeToLabel.textContent = 'Bis: 0.00 km';
 
   resetVisuals();
+  clearAltitudeRangeMmpMarkers();
+
   rangePanel.style.display = 'none';
   currentRecords = [];
   cursorMarker = null;
@@ -333,7 +354,6 @@ function initResizableSplit() {
     if (leftWidth > maxLeft) leftWidth = maxLeft;
 
     const rightWidth = rect.width - leftWidth - handleWidth;
-
     splitPanel.style.gridTemplateColumns = `${leftWidth}px ${handleWidth}px ${rightWidth}px`;
 
     const map = getMapInstance();
@@ -433,6 +453,7 @@ function initRangeSlider(records) {
   };
 
   handleRangeChange(records);
+  finalizeRangeChange(records);
   initRangeDragOverlay(records);
 }
 
@@ -460,7 +481,6 @@ function initRangeDragOverlay(records) {
     if (!Number.isFinite(maxIndex)) return;
 
     const rect = rangeDragOverlay.getBoundingClientRect();
-
     rangeDragOverlay.setPointerCapture(event.pointerId);
 
     rangeDragState = {
@@ -515,6 +535,8 @@ function initRangeDragOverlay(records) {
     try {
       rangeDragOverlay.releasePointerCapture(event.pointerId);
     } catch (_) {}
+
+    finalizeRangeChange(records);
   };
 
   rangeDragOverlay.onpointerup = endDrag;
