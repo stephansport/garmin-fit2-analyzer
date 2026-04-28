@@ -670,6 +670,18 @@ function initRangeSlider(records) {
   rangeFrom.oninput = () => handleRangeChange(records);
   rangeTo.oninput = () => handleRangeChange(records);
 
+  rangeFrom.onchange = () => finalizeRangeChange(records);
+  rangeTo.onchange = () => finalizeRangeChange(records);
+
+  function finalizeRangeChange(records) {
+    let from = parseInt(rangeFrom.value, 10);
+    let to = parseInt(rangeTo.value, 10);
+    if (from > to) [from, to] = [to, from];
+
+    applyRangeVisualsFinal(from, to, records);
+    applyRangeStats(from, to, records);
+  }
+
   // Optional: Stats/MMP nur beim Loslassen hart aktualisieren
   rangeFrom.onchange = () => {
     const from = parseInt(rangeFrom.value, 10);
@@ -698,6 +710,35 @@ function initRangeSlider(records) {
 
   // initialer Bereich
   handleRangeChange(records);
+}
+
+function sampleRecordsRange(records, fromIndex, toIndex, targetPoints = 800) {
+  const sliceLength = toIndex - fromIndex + 1;
+  if (sliceLength <= targetPoints) {
+    return { sampled: records.slice(fromIndex, toIndex + 1), sampledFrom: fromIndex, sampledTo: toIndex };
+  }
+
+  const step = sliceLength / (targetPoints - 1);
+  const sampled = [];
+
+  for (let i = 0; i < targetPoints; i++) {
+    const idx = Math.min(toIndex, fromIndex + Math.round(i * step));
+    sampled.push(records[idx]);
+  }
+
+  return { sampled, sampledFrom: fromIndex, sampledTo: toIndex };
+}
+
+function applyRangeVisualsLive(fromIndex, toIndex, records) {
+  highlightAltitudeRange(fromIndex, toIndex);
+
+  const { sampled } = sampleRecordsRange(records, fromIndex, toIndex, 700);
+  highlightMapRange(sampled, 0, sampled.length - 1);
+}
+
+function applyRangeVisualsFinal(fromIndex, toIndex, records) {
+  highlightAltitudeRange(fromIndex, toIndex);
+  highlightMapRange(records, fromIndex, toIndex);
 }
 
 // Range-Update Scheduler
