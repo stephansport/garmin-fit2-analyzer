@@ -701,7 +701,6 @@ function initRangeSlider(records) {
 }
 
 // Range-Update Scheduler
-let pendingRangeFrameId = 0;
 let pendingRangeVisual = null;
 let pendingRangeStats = null;
 let rangeStatsDebounceId = 0;
