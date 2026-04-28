@@ -1,7 +1,7 @@
 import { parseFitFile } from './api.js';
 import {
   summarizeActivity,
-  summarizeRange,        // neu
+  summarizeRange,
   formatDuration,
   formatDistance,
   formatSpeed,
@@ -18,7 +18,6 @@ import {
   highlightMapRange
 } from './charts.js';
 
-
 const fitFileInput = document.getElementById('fitFile');
 const positionIndex = document.getElementById('positionIndex');
 const positionLabel = document.getElementById('positionLabel');
@@ -32,12 +31,14 @@ const mapExpandToggle = document.getElementById('mapExpandToggle');
 const mapCenterToggle = document.getElementById('mapCenterToggle');
 const mapPanel = document.querySelector('.map-panel');
 const mapElement = document.getElementById('map');
+
 const rangePanel = document.getElementById('rangePanel');
 const rangeFrom = document.getElementById('rangeFrom');
 const rangeTo = document.getElementById('rangeTo');
 const rangeFromLabel = document.getElementById('rangeFromLabel');
 const rangeToLabel = document.getElementById('rangeToLabel');
 const rangeTrackFill = document.getElementById('rangeTrackFill');
+
 const rangeStartSlider = document.getElementById('rangeStart');
 const rangeEndSlider = document.getElementById('rangeEnd');
 const dualSlider = document.getElementById('dualSlider');
@@ -55,7 +56,6 @@ const rangeFields = {
 };
 
 let currentRecords = [];
-
 let rangeDragState = null;
 
 const fields = {
@@ -82,26 +82,114 @@ initResizableSplit();
 initMapExpandToggle();
 initMapCenterToggle();
 
+/* -------------------------------------------------------------------------- */
+/*   Range-Scheduling (Performance)                                           */
+/* -------------------------------------------------------------------------- */
+
+let pendingRangeFrame = 0;
+let pendingRangeState = null;
+
+function scheduleRangeUpdate() {
+  if (!currentRecords.length) return;
+
+  pendingRangeState = {
+    fromKm: Number(rangeStartSlider?.value ?? 0),
+    toKm: Number(rangeEndSlider?.value ?? 0)
+  };
+
+  if (pendingRangeFrame) return;
+
+  pendingRangeFrame = requestAnimationFrame(() => {
+    pendingRangeFrame = 0;
+    const state = pendingRangeState;
+    if (!state || !currentRecords.length) return;
+    runRangeUpdate(state.fromKm, state.toKm);
+  });
+}
+
+/**
+ * Führt die eigentliche Bereichs-Aktualisierung aus:
+ * - Bereichs-Metriken
+ * - Bereichs-MMP
+ * - Chart-/Karten-Highlight
+ */
+function runRangeUpdate(fromKm, toKm) {
+  if (!currentRecords.length) return;
+
+  const maxKm = getActivityTotalDistanceKm();
+  if (maxKm <= 0) return;
+
+  let from = Math.max(0, Math.min(fromKm, maxKm));
+  let to = Math.max(0, Math.min(toKm, maxKm));
+  if (from > to) [from, to] = [to, from];
+
+  const startDistance = currentRecords[0]?.distance ?? 0;
+  const endDistance = currentRecords[currentRecords.length - 1]?.distance ?? startDistance;
+  const distSpan = Math.max(endDistance - startDistance, 1);
+
+  const toIndex = Math.max(
+    0,
+    Math.min(
+      currentRecords.length - 1,
+      Math.round(((to * 1000 - startDistance) / distSpan) * (currentRecords.length - 1))
+    )
+  );
+  const fromIndex = Math.max(
+    0,
+    Math.min(
+      toIndex,
+      Math.round(((from * 1000 - startDistance) / distSpan) * (currentRecords.length - 1))
+    )
+  );
+
+  console.log('RangeUpdate km → idx', { fromKm: from, toKm: to, fromIndex, toIndex });
+
+  const slice = currentRecords.slice(fromIndex, toIndex + 1);
+  if (!slice.length) return;
+
+  const summary = summarizeRange(slice);
+  if (summary) {
+    rangeFields.duration.textContent = formatDuration(summary.durationSeconds);
+    rangeFields.distance.textContent = formatDistance(summary.distance);
+    rangeFields.speed.textContent = formatSpeed(summary.avgSpeed);
+    rangeFields.hr.textContent = formatNumber(summary.avgHeartRate, 0, 'bpm');
+    rangeFields.ascent.textContent = formatNumber(summary.totalAscent, 0, 'm');
+    rangeFields.descent.textContent = formatNumber(summary.totalDescent, 0, 'm');
+    rangeFields.power.textContent = formatNumber(summary.avgPower, 0, 'W');
+    rangeFields.cadence.textContent = formatNumber(summary.avgCadence, 0, 'rpm');
+  }
+
+  const rangeMMP = computeMaxMeanPower(slice);
+  displayRangeMaxMeanPower(rangeMMP);
+
+  highlightAltitudeRange(fromIndex, toIndex);
+  highlightMapRange(currentRecords, fromIndex, toIndex);
+}
+
+/* -------------------------------------------------------------------------- */
+/*   Distanz-Helfer                                                           */
+/* -------------------------------------------------------------------------- */
+
 function getActivityTotalDistanceKm() {
   if (window.currentActivitySummary?.totalDistanceKm != null) {
     return Number(window.currentActivitySummary.totalDistanceKm) || 0;
   }
-
   if (window.currentActivity?.summary?.totalDistanceKm != null) {
     return Number(window.currentActivity.summary.totalDistanceKm) || 0;
   }
-
   if (window.activityData?.summary?.totalDistanceKm != null) {
     return Number(window.activityData.summary.totalDistanceKm) || 0;
   }
-
-  if (window.currentRecords?.length) {
-    const last = window.currentRecords[window.currentRecords.length - 1];
-    return Number(last?.distance ?? 0);
+  if (Array.isArray(currentRecords) && currentRecords.length) {
+    const last = currentRecords[currentRecords.length - 1];
+    return Number(last?.distance ?? 0) / 1000 || 0;
   }
-
-  return Number(rangeEndSlider.max || 0);
+  return Number(rangeEndSlider?.max || 0);
 }
+
+/* -------------------------------------------------------------------------- */
+/*   Dual-Slider + verschiebbarer Bereich                                     */
+/* -------------------------------------------------------------------------- */
 
 function clampRangeValues() {
   const max = getActivityTotalDistanceKm();
@@ -135,21 +223,9 @@ function updateRangeSliderUi() {
   rangeFromLabel.textContent = `Von: ${start.toFixed(2)} km`;
   rangeToLabel.textContent = `Bis: ${end.toFixed(2)} km`;
 
-  rangeDragFill.style.left = `${startPct}%`;
-  rangeDragFill.style.width = `${Math.max(endPct - startPct, 0)}%`;
-}
-
-function notifyRangeChanged() {
-  if (typeof updateRangeAnalysis === 'function') {
-    updateRangeAnalysis();
-  }
-
-  if (typeof updateAltitudeChartSelection === 'function') {
-    updateAltitudeChartSelection();
-  }
-
-  if (typeof updateMapRangeHighlight === 'function') {
-    updateMapRangeHighlight();
+  if (rangeDragFill) {
+    rangeDragFill.style.left = `${startPct}%`;
+    rangeDragFill.style.width = `${Math.max(endPct - startPct, 0)}%`;
   }
 }
 
@@ -166,15 +242,18 @@ function setRange(startKm, endKm) {
   rangeEndSlider.value = end.toFixed(2);
 
   updateRangeSliderUi();
-  notifyRangeChanged();
+  scheduleRangeUpdate();
 }
 
 function shiftSelectedRange(deltaKm) {
+  const max = getActivityTotalDistanceKm();
   const min = 0;
-  const max = currentActivitySummary.totalDistanceKm;
+
   const from = Number(rangeStartSlider.value);
   const to = Number(rangeEndSlider.value);
   const size = to - from;
+
+  if (size <= 0 || max <= 0) return;
 
   let nextFrom = from + deltaKm;
   nextFrom = Math.max(min, Math.min(nextFrom, max - size));
@@ -185,7 +264,7 @@ function shiftSelectedRange(deltaKm) {
   rangeEndSlider.value = nextTo.toFixed(2);
 
   updateRangeSliderUi();
-  updateRangeAnalysis();
+  scheduleRangeUpdate();
 }
 
 function syncRangeSliderBounds() {
@@ -201,6 +280,8 @@ function syncRangeSliderBounds() {
 }
 
 function initializeRangeSelection() {
+  if (!currentRecords.length) return;
+
   syncRangeSliderBounds();
 
   const max = getActivityTotalDistanceKm();
@@ -219,7 +300,7 @@ function onRangeStartInput() {
   }
 
   updateRangeSliderUi();
-  notifyRangeChanged();
+  scheduleRangeUpdate();
 }
 
 function onRangeEndInput() {
@@ -232,7 +313,7 @@ function onRangeEndInput() {
   }
 
   updateRangeSliderUi();
-  notifyRangeChanged();
+  scheduleRangeUpdate();
 }
 
 function beginRangeDrag(event) {
@@ -289,12 +370,15 @@ function endRangeDrag(event) {
 
 rangeStartSlider?.addEventListener('input', onRangeStartInput);
 rangeEndSlider?.addEventListener('input', onRangeEndInput);
-
 rangeDragFill?.addEventListener('pointerdown', beginRangeDrag);
 rangeDragFill?.addEventListener('pointermove', moveRangeDrag);
 rangeDragFill?.addEventListener('pointerup', endRangeDrag);
 rangeDragFill?.addEventListener('pointercancel', endRangeDrag);
 rangeDragFill?.addEventListener('lostpointercapture', endRangeDrag);
+
+/* -------------------------------------------------------------------------- */
+/*   Analyse / Summary / MMP                                                  */
+/* -------------------------------------------------------------------------- */
 
 async function handleAnalyze() {
   const file = fitFileInput.files?.[0];
@@ -309,17 +393,21 @@ async function handleAnalyze() {
   try {
     setStatus('Datei wird analysiert ...', 'info');
     analyzeBtn.disabled = true;
+
     const data = await parseFitFile(file);
     console.log('maxMeanPower from backend:', data.maxMeanPower);
     console.log('✅ keys:', Object.keys(data.maxMeanPower || {}));
+
     const summary = summarizeActivity(data);
     renderSummary(file.name, summary);
+
     renderMap(data.records || []);
     renderAltitudeChart(data.records || []);
     currentRecords = data.records || [];
-    initRangeSlider(currentRecords);
 
-    // NEU: maxMeanPower anzeigen
+    initRangeSlider(currentRecords);
+    initializeRangeSelection();
+
     if (data.maxMeanPower && Object.keys(data.maxMeanPower).length > 0) {
       console.log('🔵 Calling displayMaxMeanPower with:', data.maxMeanPower);
       displayMaxMeanPower(data.maxMeanPower);
@@ -327,7 +415,6 @@ async function handleAnalyze() {
       console.warn('⚠️ Keine maxMeanPower-Daten vorhanden');
       displayMaxMeanPower({});
     }
-
 
     setStatus('Analyse erfolgreich abgeschlossen.', 'success');
   } catch (error) {
@@ -339,7 +426,9 @@ async function handleAnalyze() {
 }
 
 function renderSummary(fileName, summary) {
-  fields.metricStart.textContent = summary.startTime ? new Date(summary.startTime).toLocaleString('de-DE') : '–';
+  fields.metricStart.textContent = summary.startTime
+    ? new Date(summary.startTime).toLocaleString('de-DE')
+    : '–';
   fields.metricDuration.textContent = formatDuration(summary.durationSeconds);
   fields.metricDistance.textContent = formatDistance(summary.distance);
   fields.metricSpeed.textContent = formatSpeed(summary.avgSpeed);
@@ -371,12 +460,26 @@ function displayMaxMeanPower(mmp) {
   }).join('');
 }
 
+function displayRangeMaxMeanPower(mmp) {
+  const container = document.getElementById('rangeMaxMeanPowerPanel');
+  if (!container) return;
 
-function parseDuration(label) {
-  if (label.endsWith('s')) return parseInt(label);
-  if (label.endsWith('min')) return parseInt(label) * 60;
-  return 0;
+  const labels = ['1min', '5min', '10min', '20min', '60min'];
+
+  container.innerHTML = labels.map(label => {
+    const watts = mmp?.[label]?.watts;
+    return `
+      <div class="metric-card">
+        <span>${label}</span>
+        <strong>${Number.isFinite(watts) ? `${watts} W` : '–'}</strong>
+      </div>
+    `;
+  }).join('');
 }
+
+/* -------------------------------------------------------------------------- */
+/*   Reset / Status / Theme                                                   */
+/* -------------------------------------------------------------------------- */
 
 function handleReset() {
   fitFileInput.value = '';
@@ -392,7 +495,6 @@ function handleReset() {
 
   const rangeMmpPanel = document.getElementById('rangeMaxMeanPowerPanel');
   if (rangeMmpPanel) rangeMmpPanel.innerHTML = '';
-
 
   setStatus('Ansicht wurde zurückgesetzt.', 'info');
 }
@@ -411,6 +513,10 @@ function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme');
   document.documentElement.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
 }
+
+/* -------------------------------------------------------------------------- */
+/*   Split-Panel / Karte                                                      */
+/* -------------------------------------------------------------------------- */
 
 function initResizableSplit() {
   if (!splitHandle || !splitPanel) return;
@@ -444,16 +550,13 @@ function initResizableSplit() {
 
     splitPanel.style.gridTemplateColumns = `${leftWidth}px ${handleWidth}px ${rightWidth}px`;
 
-    // Live-Resize von Karte und Chart
     const map = getMapInstance();
     if (map) {
-      // Leaflet empfiehlt invalidateSize() nach Container-Resize
       map.invalidateSize(false);
     }
 
     const chart = getAltitudeChart();
     if (chart) {
-      // Chart.js passt sich an den neuen Container an
       chart.resize();
     }
   });
@@ -474,7 +577,6 @@ function initResizableSplit() {
   });
 }
 
-
 function initMapExpandToggle() {
   if (!mapExpandToggle || !mapPanel || !mapElement) return;
 
@@ -485,24 +587,17 @@ function initMapExpandToggle() {
       ? 'Karte verkleinern'
       : 'Karte vergrößern';
 
-    // KEIN mapElement.style.height mehr - CSS-Klasse übernimmt das
-
     const map = getMapInstance();
     const bounds = getLastBounds();
 
     if (!map || !bounds) return;
 
-    // Warten bis CSS-Transition fertig ist (0.2s), dann Leaflet updaten
     setTimeout(() => {
       map.invalidateSize();
       map.fitBounds(bounds, { padding: [20, 20] });
-    }, 220); // 220ms = leicht mehr als die 0.2s CSS-Transition
+    }, 220);
   });
 }
-// <- schließt initMapExpandToggle
-
-
-
 
 function initMapCenterToggle() {
   if (!mapCenterToggle) return;
@@ -518,6 +613,10 @@ function initMapCenterToggle() {
   });
 }
 
+/* -------------------------------------------------------------------------- */
+/*   Index-basierter Range-Slider (rangeFrom/rangeTo)                         */
+/* -------------------------------------------------------------------------- */
+
 function initRangeSlider(records) {
   if (!records.length) return;
 
@@ -525,7 +624,6 @@ function initRangeSlider(records) {
   rangeFrom.min = 0; rangeFrom.max = max; rangeFrom.value = 0;
   rangeTo.min = 0; rangeTo.max = max; rangeTo.value = max;
 
-  // Events – oninput statt addEventListener verhindert doppelte Handler
   rangeFrom.oninput = () => handleRangeChange(records);
   rangeTo.oninput = () => handleRangeChange(records);
 
@@ -542,7 +640,6 @@ function initRangeSlider(records) {
     updatePositionCursor(records, idx);
   };
 
-  // Einmal sofort berechnen
   handleRangeChange(records);
 }
 
@@ -550,7 +647,6 @@ function handleRangeChange(records) {
   let from = parseInt(rangeFrom.value, 10);
   let to = parseInt(rangeTo.value, 10);
 
-  // Thumbs dürfen sich nicht überlappen
   if (from > to) {
     if (document.activeElement === rangeFrom) {
       rangeFrom.value = to;
@@ -565,18 +661,15 @@ function handleRangeChange(records) {
 
   const max = records.length - 1;
 
-  // Farbige Track-Füllung zwischen den Thumbs
   rangeTrackFill.style.left = `${(from / max) * 100}%`;
   rangeTrackFill.style.width = `${((to - from) / max) * 100}%`;
 
-  // Labels
   const dFrom = records[from].distance;
   const dTo = records[to].distance;
 
   rangeFromLabel.textContent = `Von: ${dFrom != null ? (dFrom / 1000).toFixed(2) + ' km' : '–'}`;
   rangeToLabel.textContent = `Bis: ${dTo != null ? (dTo / 1000).toFixed(2) + ' km' : '–'}`;
 
-  // Werte berechnen (nur EINMAL)
   const slice = records.slice(from, to + 1);
   const summary = summarizeRange(slice);
   if (!summary) return;
@@ -590,32 +683,16 @@ function handleRangeChange(records) {
   rangeFields.power.textContent = formatNumber(summary.avgPower, 0, 'W');
   rangeFields.cadence.textContent = formatNumber(summary.avgCadence, 0, 'rpm');
 
-
-  // NEU: MaxMeanPower für den Bereich berechnen
   const rangeMMP = computeMaxMeanPower(slice);
   displayRangeMaxMeanPower(rangeMMP);
 
-  // Bereich in Chart + Karte hervorheben
   highlightAltitudeRange(from, to);
   highlightMapRange(records, from, to);
 }
 
-function displayRangeMaxMeanPower(mmp) {
-  const container = document.getElementById('rangeMaxMeanPowerPanel');
-  if (!container) return;
-
-  const labels = ['1min', '5min', '10min', '20min', '60min'];
-
-  container.innerHTML = labels.map(label => {
-    const watts = mmp?.[label]?.watts;
-    return `
-      <div class="metric-card">
-        <span>${label}</span>
-        <strong>${Number.isFinite(watts) ? `${watts} W` : '–'}</strong>
-      </div>
-    `;
-  }).join('');
-}
+/* -------------------------------------------------------------------------- */
+/*   Chart-/Map-Cursor                                                        */
+/* -------------------------------------------------------------------------- */
 
 function highlightAltitudeRange(fromIndex, toIndex) {
   const chart = getAltitudeChart();
@@ -628,17 +705,12 @@ function highlightAltitudeRange(fromIndex, toIndex) {
   const src = mainDataset.data;
   const dst = rangeDataset.data;
 
-  // Sicherheit: Länge anpassen
   if (dst.length !== src.length) {
     rangeDataset.data = new Array(src.length).fill(null);
   }
 
   for (let i = 0; i < src.length; i++) {
-    if (i >= fromIndex && i <= toIndex) {
-      rangeDataset.data[i] = src[i];
-    } else {
-      rangeDataset.data[i] = null;
-    }
+    rangeDataset.data[i] = (i >= fromIndex && i <= toIndex) ? src[i] : null;
   }
 
   chart.update('none');
@@ -679,12 +751,10 @@ function updatePositionCursor(records, index) {
   updateMapCursor(records, index);
   updatePointStats(r);
 
-  // NEU: Cursor-Punkt im Höhenprofil setzen
   const chart = getAltitudeChart();
   if (!chart) return;
 
   const mainDataset = chart.data.datasets[0];
-  const rangeDataset = chart.data.datasets[1];
   const cursorDataset = chart.data.datasets[2];
   if (!mainDataset || !cursorDataset) return;
 
@@ -696,7 +766,7 @@ function updatePositionCursor(records, index) {
   }
 
   for (let i = 0; i < src.length; i++) {
-    cursorDataset.data[i] = (i === index) ? src[i] : null;
+    dst[i] = (i === index) ? src[i] : null;
   }
 
   chart.update('none');
@@ -712,20 +782,16 @@ function updatePointStats(r) {
     'pointHr',
     r.heart_rate != null ? `${r.heart_rate} bpm` : '–'
   );
-
   safeSetText(
     'pointAltitude',
     Number.isFinite(r.altitude) ? `${r.altitude.toFixed(1)} m` : '–'
   );
-
   safeSetText(
     'pointSpeed',
     Number.isFinite(r.speed) ? `${(r.speed * 3.6).toFixed(1)} km/h` : '–'
   );
-
   safeSetText(
     'pointPower',
     r.power != null ? `${r.power} W` : '–'
   );
 }
-
