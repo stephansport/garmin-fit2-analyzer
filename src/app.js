@@ -107,6 +107,48 @@ function scheduleRangeUpdate() {
   });
 }
 
+let pendingRangeFrameId = 0;
+let pendingRange = null;
+
+function scheduleRangeEffects(fromIndex, toIndex, records) {
+  pendingRange = { fromIndex, toIndex, records };
+
+  if (pendingRangeFrameId) return;
+
+  pendingRangeFrameId = requestAnimationFrame(() => {
+    pendingRangeFrameId = 0;
+    if (!pendingRange) return;
+
+    const { fromIndex, toIndex, records } = pendingRange;
+    pendingRange = null;
+
+    applyRangeEffects(fromIndex, toIndex, records);
+  });
+}
+
+function applyRangeEffects(fromIndex, toIndex, records) {
+  const slice = records.slice(fromIndex, toIndex + 1);
+  if (!slice.length) return;
+
+  const summary = summarizeRange(slice);
+  if (summary) {
+    rangeFields.duration.textContent = formatDuration(summary.durationSeconds);
+    rangeFields.distance.textContent = formatDistance(summary.distance);
+    rangeFields.speed.textContent = formatSpeed(summary.avgSpeed);
+    rangeFields.hr.textContent = formatNumber(summary.avgHeartRate, 0, 'bpm');
+    rangeFields.ascent.textContent = formatNumber(summary.totalAscent, 0, 'm');
+    rangeFields.descent.textContent = formatNumber(summary.totalDescent, 0, 'm');
+    rangeFields.power.textContent = formatNumber(summary.avgPower, 0, 'W');
+    rangeFields.cadence.textContent = formatNumber(summary.avgCadence, 0, 'rpm');
+  }
+
+  const rangeMMP = computeMaxMeanPower(slice);
+  displayRangeMaxMeanPower(rangeMMP);
+
+  highlightAltitudeRange(fromIndex, toIndex);
+  highlightMapRange(records, fromIndex, toIndex);
+}
+
 /**
  * Führt die eigentliche Bereichs-Aktualisierung aus:
  * - Bereichs-Metriken
@@ -670,24 +712,8 @@ function handleRangeChange(records) {
   rangeFromLabel.textContent = `Von: ${dFrom != null ? (dFrom / 1000).toFixed(2) + ' km' : '–'}`;
   rangeToLabel.textContent = `Bis: ${dTo != null ? (dTo / 1000).toFixed(2) + ' km' : '–'}`;
 
-  const slice = records.slice(from, to + 1);
-  const summary = summarizeRange(slice);
-  if (!summary) return;
-
-  rangeFields.duration.textContent = formatDuration(summary.durationSeconds);
-  rangeFields.distance.textContent = formatDistance(summary.distance);
-  rangeFields.speed.textContent = formatSpeed(summary.avgSpeed);
-  rangeFields.hr.textContent = formatNumber(summary.avgHeartRate, 0, 'bpm');
-  rangeFields.ascent.textContent = formatNumber(summary.totalAscent, 0, 'm');
-  rangeFields.descent.textContent = formatNumber(summary.totalDescent, 0, 'm');
-  rangeFields.power.textContent = formatNumber(summary.avgPower, 0, 'W');
-  rangeFields.cadence.textContent = formatNumber(summary.avgCadence, 0, 'rpm');
-
-  const rangeMMP = computeMaxMeanPower(slice);
-  displayRangeMaxMeanPower(rangeMMP);
-
-  highlightAltitudeRange(from, to);
-  highlightMapRange(records, from, to);
+  // nur schedulen, nicht direkt rechnen/zeichnen
+  scheduleRangeEffects(from, to, records);
 }
 
 /* -------------------------------------------------------------------------- */
