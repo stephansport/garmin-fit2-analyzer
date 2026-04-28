@@ -38,6 +38,10 @@ const rangeTo = document.getElementById('rangeTo');
 const rangeFromLabel = document.getElementById('rangeFromLabel');
 const rangeToLabel = document.getElementById('rangeToLabel');
 const rangeTrackFill = document.getElementById('rangeTrackFill');
+const rangeStartSlider = document.getElementById('rangeStart');
+const rangeEndSlider = document.getElementById('rangeEnd');
+const dualSlider = document.getElementById('dualSlider');
+const rangeDragFill = document.getElementById('rangeDragFill');
 
 const rangeFields = {
   duration: document.getElementById('rangeDuration'),
@@ -52,6 +56,7 @@ const rangeFields = {
 
 let currentRecords = [];
 
+let rangeDragState = null;
 
 const fields = {
   metricStart: document.getElementById('metricStart'),
@@ -77,6 +82,213 @@ initResizableSplit();
 initMapExpandToggle();
 initMapCenterToggle();
 
+function getActivityTotalDistanceKm() {
+  if (window.currentActivitySummary?.totalDistanceKm != null) {
+    return Number(window.currentActivitySummary.totalDistanceKm) || 0;
+  }
+
+  if (window.currentActivity?.summary?.totalDistanceKm != null) {
+    return Number(window.currentActivity.summary.totalDistanceKm) || 0;
+  }
+
+  if (window.activityData?.summary?.totalDistanceKm != null) {
+    return Number(window.activityData.summary.totalDistanceKm) || 0;
+  }
+
+  if (window.currentRecords?.length) {
+    const last = window.currentRecords[window.currentRecords.length - 1];
+    return Number(last?.distance ?? 0);
+  }
+
+  return Number(rangeEndSlider.max || 0);
+}
+
+function clampRangeValues() {
+  const max = getActivityTotalDistanceKm();
+  let start = Number(rangeStartSlider.value);
+  let end = Number(rangeEndSlider.value);
+
+  if (Number.isNaN(start)) start = 0;
+  if (Number.isNaN(end)) end = 0;
+
+  start = Math.max(0, Math.min(start, max));
+  end = Math.max(0, Math.min(end, max));
+
+  if (start > end) {
+    const tmp = start;
+    start = end;
+    end = tmp;
+  }
+
+  rangeStartSlider.value = start.toFixed(2);
+  rangeEndSlider.value = end.toFixed(2);
+}
+
+function updateRangeSliderUi() {
+  const max = Math.max(getActivityTotalDistanceKm(), 0.0001);
+  const start = Number(rangeStartSlider.value);
+  const end = Number(rangeEndSlider.value);
+
+  const startPct = (start / max) * 100;
+  const endPct = (end / max) * 100;
+
+  rangeFromLabel.textContent = `Von: ${start.toFixed(2)} km`;
+  rangeToLabel.textContent = `Bis: ${end.toFixed(2)} km`;
+
+  rangeDragFill.style.left = `${startPct}%`;
+  rangeDragFill.style.width = `${Math.max(endPct - startPct, 0)}%`;
+}
+
+function notifyRangeChanged() {
+  if (typeof updateRangeAnalysis === 'function') {
+    updateRangeAnalysis();
+  }
+
+  if (typeof updateAltitudeChartSelection === 'function') {
+    updateAltitudeChartSelection();
+  }
+
+  if (typeof updateMapRangeHighlight === 'function') {
+    updateMapRangeHighlight();
+  }
+}
+
+function setRange(startKm, endKm) {
+  const max = getActivityTotalDistanceKm();
+  let start = Math.max(0, Math.min(startKm, max));
+  let end = Math.max(0, Math.min(endKm, max));
+
+  if (start > end) {
+    [start, end] = [end, start];
+  }
+
+  rangeStartSlider.value = start.toFixed(2);
+  rangeEndSlider.value = end.toFixed(2);
+
+  updateRangeSliderUi();
+  notifyRangeChanged();
+}
+
+function shiftSelectedRange(deltaKm) {
+  const max = getActivityTotalDistanceKm();
+  const start = Number(rangeStartSlider.value);
+  const end = Number(rangeEndSlider.value);
+  const size = end - start;
+
+  let nextStart = start + deltaKm;
+  nextStart = Math.max(0, Math.min(nextStart, max - size));
+
+  const nextEnd = nextStart + size;
+  setRange(nextStart, nextEnd);
+}
+
+function syncRangeSliderBounds() {
+  const max = getActivityTotalDistanceKm();
+
+  rangeStartSlider.min = '0';
+  rangeStartSlider.max = max.toFixed(2);
+  rangeEndSlider.min = '0';
+  rangeEndSlider.max = max.toFixed(2);
+
+  clampRangeValues();
+  updateRangeSliderUi();
+}
+
+function initializeRangeSelection() {
+  syncRangeSliderBounds();
+
+  const max = getActivityTotalDistanceKm();
+  if (max > 0) {
+    setRange(0, max);
+  }
+}
+
+function onRangeStartInput() {
+  let start = Number(rangeStartSlider.value);
+  let end = Number(rangeEndSlider.value);
+
+  if (start > end) {
+    rangeEndSlider.value = start.toFixed(2);
+    end = start;
+  }
+
+  updateRangeSliderUi();
+  notifyRangeChanged();
+}
+
+function onRangeEndInput() {
+  let start = Number(rangeStartSlider.value);
+  let end = Number(rangeEndSlider.value);
+
+  if (end < start) {
+    rangeStartSlider.value = end.toFixed(2);
+    start = end;
+  }
+
+  updateRangeSliderUi();
+  notifyRangeChanged();
+}
+
+function beginRangeDrag(event) {
+  if (!rangeDragFill || !dualSlider) return;
+  if (getActivityTotalDistanceKm() <= 0) return;
+
+  event.preventDefault();
+
+  const rect = dualSlider.getBoundingClientRect();
+  const startX = event.clientX;
+  const startRangeStart = Number(rangeStartSlider.value);
+
+  rangeDragState = {
+    pointerId: event.pointerId,
+    rectLeft: rect.left,
+    rectWidth: rect.width,
+    startX,
+    startRangeStart
+  };
+
+  rangeDragFill.classList.add('is-dragging');
+  rangeDragFill.setPointerCapture(event.pointerId);
+}
+
+function moveRangeDrag(event) {
+  if (!rangeDragState) return;
+  if (event.pointerId !== rangeDragState.pointerId) return;
+
+  const max = getActivityTotalDistanceKm();
+  if (max <= 0) return;
+
+  const dx = event.clientX - rangeDragState.startX;
+  const deltaKm = (dx / rangeDragState.rectWidth) * max;
+  const currentStart = Number(rangeStartSlider.value);
+  const intendedDelta = (rangeDragState.startRangeStart + deltaKm) - currentStart;
+
+  shiftSelectedRange(intendedDelta);
+}
+
+function endRangeDrag(event) {
+  if (!rangeDragState) return;
+  if (event.pointerId !== rangeDragState.pointerId) return;
+
+  rangeDragFill.classList.remove('is-dragging');
+
+  try {
+    rangeDragFill.releasePointerCapture(event.pointerId);
+  } catch (_) {
+    // ignore
+  }
+
+  rangeDragState = null;
+}
+
+rangeStartSlider?.addEventListener('input', onRangeStartInput);
+rangeEndSlider?.addEventListener('input', onRangeEndInput);
+
+rangeDragFill?.addEventListener('pointerdown', beginRangeDrag);
+rangeDragFill?.addEventListener('pointermove', moveRangeDrag);
+rangeDragFill?.addEventListener('pointerup', endRangeDrag);
+rangeDragFill?.addEventListener('pointercancel', endRangeDrag);
+rangeDragFill?.addEventListener('lostpointercapture', endRangeDrag);
 
 async function handleAnalyze() {
   const file = fitFileInput.files?.[0];
@@ -509,4 +721,23 @@ function updatePointStats(r) {
     'pointPower',
     r.power != null ? `${r.power} W` : '–'
   );
+}
+
+function shiftSelectedRange(deltaKm) {
+  const min = 0;
+  const max = currentActivitySummary.totalDistanceKm;
+  const from = Number(rangeStartSlider.value);
+  const to = Number(rangeEndSlider.value);
+  const size = to - from;
+
+  let nextFrom = from + deltaKm;
+  nextFrom = Math.max(min, Math.min(nextFrom, max - size));
+
+  const nextTo = nextFrom + size;
+
+  rangeStartSlider.value = nextFrom.toFixed(2);
+  rangeEndSlider.value = nextTo.toFixed(2);
+
+  updateRangeSliderUi();
+  updateRangeAnalysis();
 }
