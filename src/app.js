@@ -170,16 +170,22 @@ function setRange(startKm, endKm) {
 }
 
 function shiftSelectedRange(deltaKm) {
-  const max = getActivityTotalDistanceKm();
-  const start = Number(rangeStartSlider.value);
-  const end = Number(rangeEndSlider.value);
-  const size = end - start;
+  const min = 0;
+  const max = currentActivitySummary.totalDistanceKm;
+  const from = Number(rangeStartSlider.value);
+  const to = Number(rangeEndSlider.value);
+  const size = to - from;
 
-  let nextStart = start + deltaKm;
-  nextStart = Math.max(0, Math.min(nextStart, max - size));
+  let nextFrom = from + deltaKm;
+  nextFrom = Math.max(min, Math.min(nextFrom, max - size));
 
-  const nextEnd = nextStart + size;
-  setRange(nextStart, nextEnd);
+  const nextTo = nextFrom + size;
+
+  rangeStartSlider.value = nextFrom.toFixed(2);
+  rangeEndSlider.value = nextTo.toFixed(2);
+
+  updateRangeSliderUi();
+  updateRangeAnalysis();
 }
 
 function syncRangeSliderBounds() {
@@ -723,21 +729,3 @@ function updatePointStats(r) {
   );
 }
 
-function shiftSelectedRange(deltaKm) {
-  const min = 0;
-  const max = currentActivitySummary.totalDistanceKm;
-  const from = Number(rangeStartSlider.value);
-  const to = Number(rangeEndSlider.value);
-  const size = to - from;
-
-  let nextFrom = from + deltaKm;
-  nextFrom = Math.max(min, Math.min(nextFrom, max - size));
-
-  const nextTo = nextFrom + size;
-
-  rangeStartSlider.value = nextFrom.toFixed(2);
-  rangeEndSlider.value = nextTo.toFixed(2);
-
-  updateRangeSliderUi();
-  updateRangeAnalysis();
-}
