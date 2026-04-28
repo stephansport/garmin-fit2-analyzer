@@ -666,13 +666,27 @@ function initRangeSlider(records) {
   rangeFrom.min = 0; rangeFrom.max = max; rangeFrom.value = 0;
   rangeTo.min = 0; rangeTo.max = max; rangeTo.value = max;
 
+  // Live-Feedback beim Ziehen
   rangeFrom.oninput = () => handleRangeChange(records);
   rangeTo.oninput = () => handleRangeChange(records);
 
+  // Optional: Stats/MMP nur beim Loslassen hart aktualisieren
+  rangeFrom.onchange = () => {
+    const from = parseInt(rangeFrom.value, 10);
+    const to = parseInt(rangeTo.value, 10);
+    applyRangeStats(Math.min(from, to), Math.max(from, to), records);
+  };
+  rangeTo.onchange = () => {
+    const from = parseInt(rangeFrom.value, 10);
+    const to = parseInt(rangeTo.value, 10);
+    applyRangeStats(Math.min(from, to), Math.max(from, to), records);
+  };
+
   rangePanel.style.display = '';
 
+  const maxIndex = records.length - 1;
   positionIndex.min = 0;
-  positionIndex.max = max;
+  positionIndex.max = maxIndex;
   positionIndex.value = 0;
 
   updatePositionCursor(records, 0);
@@ -682,13 +696,84 @@ function initRangeSlider(records) {
     updatePositionCursor(records, idx);
   };
 
+  // initialer Bereich
   handleRangeChange(records);
+}
+
+// Range-Update Scheduler
+let pendingRangeFrameId = 0;
+let pendingRangeVisual = null;
+let pendingRangeStats = null;
+let rangeStatsDebounceId = 0;
+
+// Live-Visuelles Update: Chart + Karte
+function applyRangeVisuals(fromIndex, toIndex, records) {
+  highlightAltitudeRange(fromIndex, toIndex);
+  highlightMapRange(records, fromIndex, toIndex);
+}
+
+// Schwere Stats-Berechnungen: Metriken + MMP
+function applyRangeStats(fromIndex, toIndex, records) {
+  const slice = records.slice(fromIndex, toIndex + 1);
+  if (!slice.length) return;
+
+  const summary = summarizeRange(slice);
+  if (summary) {
+    rangeFields.duration.textContent = formatDuration(summary.durationSeconds);
+    rangeFields.distance.textContent = formatDistance(summary.distance);
+    rangeFields.speed.textContent = formatSpeed(summary.avgSpeed);
+    rangeFields.hr.textContent = formatNumber(summary.avgHeartRate, 0, 'bpm');
+    rangeFields.ascent.textContent = formatNumber(summary.totalAscent, 0, 'm');
+    rangeFields.descent.textContent = formatNumber(summary.totalDescent, 0, 'm');
+    rangeFields.power.textContent = formatNumber(summary.avgPower, 0, 'W');
+    rangeFields.cadence.textContent = formatNumber(summary.avgCadence, 0, 'rpm');
+  }
+
+  const rangeMMP = computeMaxMeanPower(slice);
+  displayRangeMaxMeanPower(rangeMMP);
+}
+
+// nur die visuellen Effekte pro Frame
+function scheduleRangeVisuals(fromIndex, toIndex, records) {
+  pendingRangeVisual = { fromIndex, toIndex, records };
+
+  if (pendingRangeFrameId) return;
+
+  pendingRangeFrameId = requestAnimationFrame(() => {
+    pendingRangeFrameId = 0;
+    if (!pendingRangeVisual) return;
+
+    const { fromIndex, toIndex, records } = pendingRangeVisual;
+    pendingRangeVisual = null;
+
+    applyRangeVisuals(fromIndex, toIndex, records);
+  });
+}
+
+// Stats/MMP mit Debounce (z.B. 200 ms nach letzter Änderung)
+function scheduleRangeStats(fromIndex, toIndex, records) {
+  pendingRangeStats = { fromIndex, toIndex, records };
+
+  if (rangeStatsDebounceId) {
+    clearTimeout(rangeStatsDebounceId);
+  }
+
+  rangeStatsDebounceId = setTimeout(() => {
+    rangeStatsDebounceId = 0;
+    if (!pendingRangeStats) return;
+
+    const { fromIndex, toIndex, records } = pendingRangeStats;
+    pendingRangeStats = null;
+
+    applyRangeStats(fromIndex, toIndex, records);
+  }, 200); // ggf. anpassen (150–300 ms)
 }
 
 function handleRangeChange(records) {
   let from = parseInt(rangeFrom.value, 10);
   let to = parseInt(rangeTo.value, 10);
 
+  // Thumbs dürfen sich nicht überlappen
   if (from > to) {
     if (document.activeElement === rangeFrom) {
       rangeFrom.value = to;
@@ -703,17 +788,22 @@ function handleRangeChange(records) {
 
   const max = records.length - 1;
 
+  // Farbige Track-Füllung zwischen den Thumbs
   rangeTrackFill.style.left = `${(from / max) * 100}%`;
   rangeTrackFill.style.width = `${((to - from) / max) * 100}%`;
 
+  // Labels
   const dFrom = records[from].distance;
   const dTo = records[to].distance;
 
   rangeFromLabel.textContent = `Von: ${dFrom != null ? (dFrom / 1000).toFixed(2) + ' km' : '–'}`;
   rangeToLabel.textContent = `Bis: ${dTo != null ? (dTo / 1000).toFixed(2) + ' km' : '–'}`;
 
-  // nur schedulen, nicht direkt rechnen/zeichnen
-  scheduleRangeEffects(from, to, records);
+  // Live: nur visuelle Effekte (Chart & Karte) pro Frame
+  scheduleRangeVisuals(from, to, records);
+
+  // „schwere“ Stats & MMP leicht verzögert
+  scheduleRangeStats(from, to, records);
 }
 
 /* -------------------------------------------------------------------------- */
