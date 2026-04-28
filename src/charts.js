@@ -167,6 +167,12 @@ export function clearMapMmpRanges() {
   mmpOverlayLines = [];
 }
 
+function buildMmpRangeDataset(sourceData, startIndex, endIndex) {
+  return sourceData.map((value, index) =>
+    index >= startIndex && index <= endIndex ? value : null
+  );
+}
+
 export function renderMap(records) {
   const valid = (records || []).filter(
     r => Number.isFinite(r.position_lat) && Number.isFinite(r.position_long)
@@ -284,6 +290,56 @@ export function renderAltitudeChart(records) {
           borderColor: '#55aab3',
           backgroundColor: 'rgba(85, 170, 179, 0.18)',
           borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.18,
+          fill: true
+        },
+        {
+          label: 'MMP 60min',
+          data: new Array(altitudeData.length).fill(null),
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59, 130, 246, 0.12)',
+          borderWidth: 0,
+          pointRadius: 0,
+          tension: 0.18,
+          fill: true
+        },
+        {
+          label: 'MMP 20min',
+          data: new Array(altitudeData.length).fill(null),
+          borderColor: '#22c55e',
+          backgroundColor: 'rgba(34, 197, 94, 0.12)',
+          borderWidth: 0,
+          pointRadius: 0,
+          tension: 0.18,
+          fill: true
+        },
+        {
+          label: 'MMP 10min',
+          data: new Array(altitudeData.length).fill(null),
+          borderColor: '#eab308',
+          backgroundColor: 'rgba(234, 179, 8, 0.12)',
+          borderWidth: 0,
+          pointRadius: 0,
+          tension: 0.18,
+          fill: true
+        },
+        {
+          label: 'MMP 5min',
+          data: new Array(altitudeData.length).fill(null),
+          borderColor: '#f97316',
+          backgroundColor: 'rgba(249, 115, 22, 0.14)',
+          borderWidth: 0,
+          pointRadius: 0,
+          tension: 0.18,
+          fill: true
+        },
+        {
+          label: 'MMP 1min',
+          data: new Array(altitudeData.length).fill(null),
+          borderColor: '#ef4444',
+          backgroundColor: 'rgba(239, 68, 68, 0.16)',
+          borderWidth: 0,
           pointRadius: 0,
           tension: 0.18,
           fill: true

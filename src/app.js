@@ -121,6 +121,7 @@ function applyRangeStats(fromIndex, toIndex, records) {
 
   setAltitudeRangeMmpMarkers(absoluteMarkers);
   highlightMapMmpRanges(records, absoluteMarkers);
+  setAltitudeRangeMmpFills(absoluteMarkers);
 }
 
 function absolutizeRangeMmp(rangeMMP, baseIndex) {
@@ -299,6 +300,7 @@ function handleReset() {
   resetVisuals();
   clearAltitudeRangeMmpMarkers();
   clearMapMmpRanges();
+  clearAltitudeRangeMmpFills();
 
   rangePanel.style.display = 'none';
   currentRecords = [];
