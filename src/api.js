@@ -1,4 +1,4 @@
-const backendUrl = 'http://localhost:3000';
+const backendUrl = `${window.location.protocol}//${window.location.hostname}:3000`;
 
 export async function parseFitFile(file) {
   const formData = new FormData();

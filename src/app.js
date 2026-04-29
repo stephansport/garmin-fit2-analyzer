@@ -49,6 +49,8 @@ const rangeDragOverlay = document.getElementById('rangeDragOverlay');
 let rangeDragState = null;
 let currentRecords = [];
 let cursorMarker = null;
+let activeMmpLabels = new Set(['1min', '5min', '10min', '20min', '30min', '60min']);
+let lastAbsoluteMarkers = {};
 
 const rangeFields = {
   duration: document.getElementById('rangeDuration'),
@@ -117,13 +119,12 @@ function applyRangeStats(fromIndex, toIndex, records) {
   }
 
   const rangeMMP = computeMaxMeanPower(slice);
-  displayRangeMaxMeanPower(rangeMMP);
+  displayRangeMaxMeanPower(rangeMMP, records, fromIndex);
 
   const absoluteMarkers = absolutizeRangeMmp(rangeMMP, fromIndex);
+  lastAbsoluteMarkers = absoluteMarkers;
 
-  setAltitudeRangeMmpMarkers(absoluteMarkers);
-  highlightMapMmpRanges(records, absoluteMarkers);
-  setAltitudeRangeMmpFills(absoluteMarkers);
+  applyMmpVisibility(records);
 }
 
 function absolutizeRangeMmp(rangeMMP, baseIndex) {
@@ -248,7 +249,7 @@ function displayMaxMeanPower(mmp) {
   const container = document.getElementById('maxMeanPowerPanel');
   if (!container) return;
 
-  const labels = ['1min', '5min', '10min', '20min', '60min'];
+  const labels = ['1min', '5min', '10min', '20min', '30min', '60min'];
 
   container.innerHTML = labels.map(label => {
     const watts = mmp?.[label]?.watts;
@@ -261,21 +262,58 @@ function displayMaxMeanPower(mmp) {
   }).join('');
 }
 
-function displayRangeMaxMeanPower(mmp) {
+const MMP_COLORS = {
+  '1min':  '#ef4444',
+  '5min':  '#f97316',
+  '10min': '#eab308',
+  '20min': '#22c55e',
+  '30min': '#a855f7',
+  '60min': '#3b82f6'
+};
+
+function displayRangeMaxMeanPower(mmp, records, fromIndex) {
   const container = document.getElementById('rangeMaxMeanPowerPanel');
   if (!container) return;
 
-  const labels = ['1min', '5min', '10min', '20min', '60min'];
+  const labels = ['1min', '5min', '10min', '20min', '30min', '60min'];
 
   container.innerHTML = labels.map(label => {
     const watts = mmp?.[label]?.watts;
+    const active = activeMmpLabels.has(label);
+    const color = MMP_COLORS[label];
     return `
-      <div class="metric-card">
+      <div class="metric-card mmp-toggle ${active ? 'mmp-active' : 'mmp-inactive'}"
+           data-mmp-label="${label}"
+           style="--mmp-color: ${color}">
         <span>${label}</span>
         <strong>${Number.isFinite(watts) ? `${watts} W` : '–'}</strong>
       </div>
     `;
   }).join('');
+
+  container.querySelectorAll('.mmp-toggle').forEach(card => {
+    card.addEventListener('click', () => {
+      const label = card.dataset.mmpLabel;
+      if (activeMmpLabels.has(label)) {
+        activeMmpLabels.delete(label);
+        card.classList.replace('mmp-active', 'mmp-inactive');
+      } else {
+        activeMmpLabels.add(label);
+        card.classList.replace('mmp-inactive', 'mmp-active');
+      }
+      applyMmpVisibility(currentRecords);
+    });
+  });
+}
+
+function applyMmpVisibility(records) {
+  const filtered = {};
+  for (const [key, val] of Object.entries(lastAbsoluteMarkers)) {
+    filtered[key] = activeMmpLabels.has(key) ? val : null;
+  }
+  setAltitudeRangeMmpMarkers(filtered);
+  highlightMapMmpRanges(records, filtered);
+  setAltitudeRangeMmpFills(filtered);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -300,6 +338,8 @@ function handleReset() {
   clearAltitudeRangeMmpMarkers();
   clearMapMmpRanges();
   clearAltitudeRangeMmpFills();
+  lastAbsoluteMarkers = {};
+  activeMmpLabels = new Set(['1min', '5min', '10min', '20min', '30min', '60min']);
 
   rangePanel.style.display = 'none';
   currentRecords = [];
@@ -596,7 +636,7 @@ function highlightAltitudeRange(fromIndex, toIndex) {
   if (!chart) return;
 
   const rangeDataset = chart.data.datasets[0]; // Ausgewählter Bereich
-  const mainDataset = chart.data.datasets[6];  // Höhe (m)
+  const mainDataset = chart.data.datasets[7];  // Höhe (m)
 
   if (!mainDataset || !rangeDataset) return;
 
@@ -647,8 +687,8 @@ function updatePositionCursor(records, index) {
   const chart = getAltitudeChart();
   if (!chart) return;
 
-  const mainDataset = chart.data.datasets[6];   // Höhe (m)
-  const cursorDataset = chart.data.datasets[7]; // Position
+  const mainDataset = chart.data.datasets[7];   // Höhe (m)
+  const cursorDataset = chart.data.datasets[8]; // Position
   if (!mainDataset || !cursorDataset) return;
 
   const src = mainDataset.data;

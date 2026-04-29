@@ -95,6 +95,7 @@ export function computeMaxMeanPower(records) {
     { key: '5min', seconds: 300 },
     { key: '10min', seconds: 600 },
     { key: '20min', seconds: 1200 },
+    { key: '30min', seconds: 1800 },
     { key: '60min', seconds: 3600 }
   ];
 

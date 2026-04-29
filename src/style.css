@@ -439,18 +439,46 @@ td:last-child {
 
 .range-mmp-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(80px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(6, minmax(70px, 1fr));
+  gap: 0.5rem;
 }
 
 .range-mmp-grid .metric-card {
-  padding: 0.7rem;
+  padding: 0.5rem 0.4rem;
   text-align: center;
 }
 
 .range-mmp-grid .metric-card strong {
   white-space: nowrap;
   font-size: 1rem;
+}
+
+/* MMP Toggle-Kacheln */
+.mmp-toggle {
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.15s, box-shadow 0.15s, border-color 0.15s;
+  border: 2px solid transparent;
+}
+
+.mmp-toggle.mmp-active {
+  border-color: var(--mmp-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mmp-color) 30%, transparent);
+  opacity: 1;
+}
+
+.mmp-toggle.mmp-active strong {
+  color: var(--mmp-color);
+}
+
+.mmp-toggle.mmp-inactive {
+  opacity: 0.35;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.mmp-toggle:hover {
+  opacity: 1;
 }
 
 /* ── Positions-Panel (Cursor-Slider) ───────────────────────── */
@@ -540,18 +568,18 @@ td:last-child {
 }
 
 #maxMeanPowerPanel {
-  grid-template-columns: repeat(5, minmax(90px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(6, minmax(70px, 1fr));
+  gap: 0.5rem;
 }
 
 #maxMeanPowerPanel .metric-card {
-  padding: 0.7rem;
+  padding: 0.5rem 0.4rem;
   text-align: center;
 }
 
 #maxMeanPowerPanel .metric-card strong {
   white-space: nowrap;
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 
 @media (max-width: 1100px) {
@@ -568,6 +596,12 @@ td:last-child {
 }
 
 @media (max-width: 900px) {
+  #maxMeanPowerPanel {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) and (min-width: 601px) {
   #maxMeanPowerPanel {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -631,6 +665,6 @@ td:last-child {
 
 @media (max-width: 600px) {
   #maxMeanPowerPanel {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
