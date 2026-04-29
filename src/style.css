@@ -439,18 +439,46 @@ td:last-child {
 
 .range-mmp-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(80px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(6, minmax(70px, 1fr));
+  gap: 0.5rem;
 }
 
 .range-mmp-grid .metric-card {
-  padding: 0.7rem;
+  padding: 0.5rem 0.4rem;
   text-align: center;
 }
 
 .range-mmp-grid .metric-card strong {
   white-space: nowrap;
   font-size: 1rem;
+}
+
+/* MMP Toggle-Kacheln */
+.mmp-toggle {
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.15s, box-shadow 0.15s, border-color 0.15s;
+  border: 2px solid transparent;
+}
+
+.mmp-toggle.mmp-active {
+  border-color: var(--mmp-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mmp-color) 30%, transparent);
+  opacity: 1;
+}
+
+.mmp-toggle.mmp-active strong {
+  color: var(--mmp-color);
+}
+
+.mmp-toggle.mmp-inactive {
+  opacity: 0.35;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.mmp-toggle:hover {
+  opacity: 1;
 }
 
 /* ── Positions-Panel (Cursor-Slider) ───────────────────────── */
@@ -540,18 +568,18 @@ td:last-child {
 }
 
 #maxMeanPowerPanel {
-  grid-template-columns: repeat(5, minmax(90px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(6, minmax(70px, 1fr));
+  gap: 0.5rem;
 }
 
 #maxMeanPowerPanel .metric-card {
-  padding: 0.7rem;
+  padding: 0.5rem 0.4rem;
   text-align: center;
 }
 
 #maxMeanPowerPanel .metric-card strong {
   white-space: nowrap;
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 
 @media (max-width: 1100px) {
@@ -568,6 +596,12 @@ td:last-child {
 }
 
 @media (max-width: 900px) {
+  #maxMeanPowerPanel {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) and (min-width: 601px) {
   #maxMeanPowerPanel {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -631,6 +665,62 @@ td:last-child {
 
 @media (max-width: 600px) {
   #maxMeanPowerPanel {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+/* ── Zonen-Panel ───────────────────────────────────────────────── */
+.zones-panel { grid-column: span 12; }
+
+.zones-mode-toggle { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+
+.zones-tab {
+  padding: 0.4rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.15s, color 0.15s;
+}
+.zones-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+.zones-inputs { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+.zones-inputs label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.9rem; color: var(--muted); }
+.zones-inputs input {
+  width: 120px; padding: 0.4rem 0.6rem;
+  border-radius: 6px; border: 1px solid var(--border);
+  background: var(--surface-alt); color: var(--text); font-size: 0.95rem;
+}
+
+.zones-expert-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-bottom: 0.75rem; }
+.zones-expert-table th, .zones-expert-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); text-align: left; }
+.zones-expert-table input {
+  width: 80px; padding: 0.3rem 0.4rem;
+  border-radius: 4px; border: 1px solid var(--border);
+  background: var(--surface-alt); color: var(--text); font-size: 0.85rem;
+}
+
+.zone-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+
+.zones-preview-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; }
+.zone-preview-card {
+  border: 2px solid; border-radius: 8px; padding: 0.5rem 0.6rem;
+  font-size: 0.82rem; display: flex; flex-direction: column; gap: 0.2rem;
+}
+.zone-preview-card strong { font-size: 0.85rem; }
+
+.zone-bars { display: flex; flex-direction: column; gap: 1.5rem; }
+.zone-bar-group h4 { margin: 0 0 0.5rem 0; font-size: 0.9rem; color: var(--muted); }
+.zone-bar-row { display: grid; grid-template-columns: 140px 1fr 40px 60px; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
+.zone-label { font-size: 0.82rem; color: var(--muted); white-space: nowrap; }
+.zone-bar-track { background: var(--border); border-radius: 4px; height: 12px; overflow: hidden; }
+.zone-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+.zone-bar-pct { font-size: 0.82rem; text-align: right; }
+.zone-bar-time { font-size: 0.82rem; color: var(--muted); }
+
+@media (max-width: 700px) {
+  .zones-preview-grid { grid-template-columns: repeat(2, 1fr); }
+  .zone-bar-row { grid-template-columns: 100px 1fr 36px 52px; }
 }

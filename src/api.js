@@ -1,4 +1,7 @@
-const backendUrl = 'http://localhost:3000';
+const backendUrl =
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:3000'
+    : 'https://garmin-fit2-backend.onrender.com';
 
 export async function parseFitFile(file) {
   const formData = new FormData();

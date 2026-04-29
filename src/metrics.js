@@ -95,6 +95,7 @@ export function computeMaxMeanPower(records) {
     { key: '5min', seconds: 300 },
     { key: '10min', seconds: 600 },
     { key: '20min', seconds: 1200 },
+    { key: '30min', seconds: 1800 },
     { key: '60min', seconds: 3600 }
   ];
 
@@ -201,4 +202,64 @@ function toMs(value) {
 
 function toFinite(value) {
   return Number.isFinite(value) ? value : null;
+}
+
+/* -------------------------------------------------------------------------- */
+/*   Zonen                                                                    */
+/* -------------------------------------------------------------------------- */
+
+export const ZONE_NAMES = ['Z1 – Regeneration', 'Z2 – Ausdauer', 'Z3 – Tempo', 'Z4 – Schwelle', 'Z5 – VO2max'];
+export const ZONE_COLORS = ['#64748b', '#3b82f6', '#22c55e', '#f97316', '#ef4444'];
+
+export function calcZonesFromProfile(ftp, hrMax) {
+  const powerPct = [0.55, 0.75, 0.90, 1.05, Infinity];
+  const hrPct    = [0.60, 0.70, 0.80, 0.90, Infinity];
+  return powerPct.map((upperPct, i) => {
+    const lowerPct   = i === 0 ? 0 : powerPct[i - 1];
+    const lowerHrPct = i === 0 ? 0 : hrPct[i - 1];
+    return {
+      name:     ZONE_NAMES[i],
+      color:    ZONE_COLORS[i],
+      powerMin: Math.round(lowerPct * ftp),
+      powerMax: upperPct === Infinity ? null : Math.round(upperPct * ftp),
+      hrMin:    Math.round(lowerHrPct * hrMax),
+      hrMax:    upperPct === Infinity ? null : Math.round(hrPct[i] * hrMax),
+    };
+  });
+}
+
+export function analyzeZones(records, zones) {
+  if (!zones || !zones.length || !records || !records.length) return [];
+  const powerTime = new Array(zones.length).fill(0);
+  const hrTime    = new Array(zones.length).fill(0);
+  let totalPower  = 0;
+  let totalHr     = 0;
+  for (const r of records) {
+    if (Number.isFinite(r.power)) {
+      totalPower++;
+      const zi = zoneIndex(r.power, zones, 'power');
+      if (zi >= 0) powerTime[zi]++;
+    }
+    if (Number.isFinite(r.heart_rate)) {
+      totalHr++;
+      const zi = zoneIndex(r.heart_rate, zones, 'hr');
+      if (zi >= 0) hrTime[zi]++;
+    }
+  }
+  return zones.map((z, i) => ({
+    ...z,
+    powerSeconds: powerTime[i],
+    hrSeconds:    hrTime[i],
+    powerPct:     totalPower > 0 ? (powerTime[i] / totalPower) * 100 : 0,
+    hrPct:        totalHr    > 0 ? (hrTime[i]    / totalHr)    * 100 : 0,
+  }));
+}
+
+function zoneIndex(value, zones, type) {
+  for (let i = 0; i < zones.length; i++) {
+    const min = type === 'power' ? zones[i].powerMin : zones[i].hrMin;
+    const max = type === 'power' ? zones[i].powerMax : zones[i].hrMax;
+    if (value >= min && (max === null || value < max)) return i;
+  }
+  return zones.length - 1;
 }

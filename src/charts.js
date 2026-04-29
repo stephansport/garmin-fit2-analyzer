@@ -23,6 +23,7 @@ const rangeMmpPlugin = {
       '5min': '#f97316',
       '10min': '#eab308',
       '20min': '#22c55e',
+      '30min': '#a855f7',
       '60min': '#3b82f6'
     };
 
@@ -112,20 +113,22 @@ export function highlightMapMmpRanges(records, markers) {
   mmpOverlayLines.forEach(line => line.remove());
   mmpOverlayLines = [];
 
-  const order = ['60min', '20min', '10min', '5min', '1min'];
+  const order = ['60min', '30min', '20min', '10min', '5min', '1min'];
   const colors = {
     '1min': '#ef4444',
     '5min': '#f97316',
     '10min': '#eab308',
     '20min': '#22c55e',
+    '30min': '#a855f7',
     '60min': '#3b82f6'
   };
 
   const weights = {
-    '1min': 8,
-    '5min': 7,
-    '10min': 6,
-    '20min': 5,
+    '1min': 9,
+    '5min': 8,
+    '10min': 7,
+    '20min': 6,
+    '30min': 5,
     '60min': 4
   };
 
@@ -296,6 +299,16 @@ export function renderAltitudeChart(records) {
           fill: 'origin'
         },
         {
+          label: 'MMP 30min',
+          data: new Array(altitudeData.length).fill(null),
+          borderColor: '#a855f7',
+          backgroundColor: 'rgba(168, 85, 247, 0.26)',
+          borderWidth: 0,
+          pointRadius: 0,
+          tension: 0.18,
+          fill: 'origin'
+        },
+        {
           label: 'MMP 20min',
           data: new Array(altitudeData.length).fill(null),
           borderColor: '#22c55e',
@@ -335,7 +348,7 @@ export function renderAltitudeChart(records) {
           tension: 0.18,
           fill: 'origin'
         },
-        // 7. Haupt-Höhenlinie (liegt oben auf allen Flächen)
+        // 8. Haupt-Höhenlinie (liegt oben auf allen Flächen)
         {
           label: 'Höhe (m)',
           data: altitudeData,
@@ -346,7 +359,7 @@ export function renderAltitudeChart(records) {
           tension: 0.18,
           fill: false
         },
-        // 8. Cursor
+        // 9. Cursor
         {
           label: 'Position',
           data: cursorData,
@@ -415,15 +428,16 @@ export function renderAltitudeChart(records) {
 export function setAltitudeRangeMmpFills(markers) {
   if (!altitudeChart) return;
 
-  const source = altitudeChart.data.datasets[6]?.data || []; // Höhe (m)
+  const source = altitudeChart.data.datasets[7]?.data || []; // Höhe (m)
   const datasets = altitudeChart.data.datasets;
 
   const map = {
     '60min': 1,
-    '20min': 2,
-    '10min': 3,
-    '5min': 4,
-    '1min': 5
+    '30min': 2,
+    '20min': 3,
+    '10min': 4,
+    '5min': 5,
+    '1min': 6
   };
 
   for (const [key, datasetIndex] of Object.entries(map)) {
@@ -447,9 +461,9 @@ export function setAltitudeRangeMmpFills(markers) {
 export function clearAltitudeRangeMmpFills() {
   if (!altitudeChart) return;
 
-  const sourceLen = altitudeChart.data.datasets[6]?.data.length || 0;
+  const sourceLen = altitudeChart.data.datasets[7]?.data.length || 0;
 
-  [1, 2, 3, 4, 5].forEach(index => {
+  [1, 2, 3, 4, 5, 6].forEach(index => {
     if (altitudeChart.data.datasets[index]) {
       altitudeChart.data.datasets[index].data = new Array(sourceLen).fill(null);
     }

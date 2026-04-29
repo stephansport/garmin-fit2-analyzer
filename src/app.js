@@ -6,7 +6,11 @@ import {
   formatDistance,
   formatSpeed,
   formatNumber,
-  computeMaxMeanPower
+  computeMaxMeanPower,
+  calcZonesFromProfile,
+  analyzeZones,
+  ZONE_NAMES,
+  ZONE_COLORS
 } from './metrics.js';
 import {
   renderMap,
@@ -49,6 +53,9 @@ const rangeDragOverlay = document.getElementById('rangeDragOverlay');
 let rangeDragState = null;
 let currentRecords = [];
 let cursorMarker = null;
+let activeMmpLabels = new Set(['1min', '5min', '10min', '20min', '30min', '60min']);
+let lastAbsoluteMarkers = {};
+let currentZones = [];
 
 const rangeFields = {
   duration: document.getElementById('rangeDuration'),
@@ -85,6 +92,7 @@ initTheme();
 initResizableSplit();
 initMapExpandToggle();
 initMapCenterToggle();
+initZonesPanel();
 
 /* -------------------------------------------------------------------------- */
 /*   Range Scheduling                                                         */
@@ -117,13 +125,14 @@ function applyRangeStats(fromIndex, toIndex, records) {
   }
 
   const rangeMMP = computeMaxMeanPower(slice);
-  displayRangeMaxMeanPower(rangeMMP);
+  displayRangeMaxMeanPower(rangeMMP, records, fromIndex);
 
   const absoluteMarkers = absolutizeRangeMmp(rangeMMP, fromIndex);
+  lastAbsoluteMarkers = absoluteMarkers;
 
-  setAltitudeRangeMmpMarkers(absoluteMarkers);
-  highlightMapMmpRanges(records, absoluteMarkers);
-  setAltitudeRangeMmpFills(absoluteMarkers);
+  applyMmpVisibility(records);
+
+  if (currentZones.length) renderZoneAnalysis(slice, currentZones);
 }
 
 function absolutizeRangeMmp(rangeMMP, baseIndex) {
@@ -248,7 +257,7 @@ function displayMaxMeanPower(mmp) {
   const container = document.getElementById('maxMeanPowerPanel');
   if (!container) return;
 
-  const labels = ['1min', '5min', '10min', '20min', '60min'];
+  const labels = ['1min', '5min', '10min', '20min', '30min', '60min'];
 
   container.innerHTML = labels.map(label => {
     const watts = mmp?.[label]?.watts;
@@ -261,21 +270,181 @@ function displayMaxMeanPower(mmp) {
   }).join('');
 }
 
-function displayRangeMaxMeanPower(mmp) {
+const MMP_COLORS = {
+  '1min':  '#ef4444',
+  '5min':  '#f97316',
+  '10min': '#eab308',
+  '20min': '#22c55e',
+  '30min': '#a855f7',
+  '60min': '#3b82f6'
+};
+
+function displayRangeMaxMeanPower(mmp, records, fromIndex) {
   const container = document.getElementById('rangeMaxMeanPowerPanel');
   if (!container) return;
 
-  const labels = ['1min', '5min', '10min', '20min', '60min'];
+  const labels = ['1min', '5min', '10min', '20min', '30min', '60min'];
 
   container.innerHTML = labels.map(label => {
     const watts = mmp?.[label]?.watts;
+    const active = activeMmpLabels.has(label);
+    const color = MMP_COLORS[label];
     return `
-      <div class="metric-card">
+      <div class="metric-card mmp-toggle ${active ? 'mmp-active' : 'mmp-inactive'}"
+           data-mmp-label="${label}"
+           style="--mmp-color: ${color}">
         <span>${label}</span>
         <strong>${Number.isFinite(watts) ? `${watts} W` : '–'}</strong>
       </div>
     `;
   }).join('');
+
+  container.querySelectorAll('.mmp-toggle').forEach(card => {
+    card.addEventListener('click', () => {
+      const label = card.dataset.mmpLabel;
+      if (activeMmpLabels.has(label)) {
+        activeMmpLabels.delete(label);
+        card.classList.replace('mmp-active', 'mmp-inactive');
+      } else {
+        activeMmpLabels.add(label);
+        card.classList.replace('mmp-inactive', 'mmp-active');
+      }
+      applyMmpVisibility(currentRecords);
+    });
+  });
+}
+
+function applyMmpVisibility(records) {
+  const filtered = {};
+  for (const [key, val] of Object.entries(lastAbsoluteMarkers)) {
+    filtered[key] = activeMmpLabels.has(key) ? val : null;
+  }
+  setAltitudeRangeMmpMarkers(filtered);
+  highlightMapMmpRanges(records, filtered);
+  setAltitudeRangeMmpFills(filtered);
+}
+
+/* -------------------------------------------------------------------------- */
+/*   Profil / Zonen                                                           */
+/* -------------------------------------------------------------------------- */
+
+function initZonesPanel() {
+  const tabSimple  = document.getElementById('zoneTabSimple');
+  const tabExpert  = document.getElementById('zoneTabExpert');
+  const modeSimple = document.getElementById('zoneModeSimple');
+  const modeExpert = document.getElementById('zoneModeExpert');
+
+  tabSimple.addEventListener('click', () => {
+    tabSimple.classList.add('active');
+    tabExpert.classList.remove('active');
+    modeSimple.style.display = '';
+    modeExpert.style.display = 'none';
+  });
+  tabExpert.addEventListener('click', () => {
+    tabExpert.classList.add('active');
+    tabSimple.classList.remove('active');
+    modeExpert.style.display = '';
+    modeSimple.style.display = 'none';
+    buildExpertTable();
+  });
+
+  document.getElementById('calcZonesBtn').addEventListener('click', () => {
+    const ftp   = parseFloat(document.getElementById('inputFtp').value);
+    const hrMax = parseFloat(document.getElementById('inputHrMax').value);
+    if (!Number.isFinite(ftp) || ftp <= 0 || !Number.isFinite(hrMax) || hrMax <= 0) {
+      alert('Bitte gültige Werte für FTP und HFmax eingeben.');
+      return;
+    }
+    currentZones = calcZonesFromProfile(ftp, hrMax);
+    renderZonesPreview(currentZones);
+    if (currentRecords.length) renderZoneAnalysis(currentRecords, currentZones);
+  });
+
+  document.getElementById('applyExpertZonesBtn').addEventListener('click', () => {
+    const zones = readExpertZones();
+    if (!zones) return;
+    currentZones = zones;
+    renderZonesPreview(currentZones);
+    if (currentRecords.length) renderZoneAnalysis(currentRecords, currentZones);
+  });
+}
+
+function buildExpertTable() {
+  const tbody = document.getElementById('zonesExpertBody');
+  if (tbody.children.length > 0) return;
+  ZONE_NAMES.forEach((name, i) => {
+    const existing = currentZones[i];
+    tbody.insertAdjacentHTML('beforeend', `
+      <tr>
+        <td><span class="zone-dot" style="background:${ZONE_COLORS[i]}"></span></td>
+        <td>${name}</td>
+        <td><input class="zone-input" data-zone="${i}" data-field="powerMin" type="number" value="${existing?.powerMin ?? ''}" placeholder="W" /></td>
+        <td><input class="zone-input" data-zone="${i}" data-field="powerMax" type="number" value="${existing?.powerMax ?? ''}" placeholder="W (leer=∞)" /></td>
+        <td><input class="zone-input" data-zone="${i}" data-field="hrMin" type="number" value="${existing?.hrMin ?? ''}" placeholder="bpm" /></td>
+        <td><input class="zone-input" data-zone="${i}" data-field="hrMax" type="number" value="${existing?.hrMax ?? ''}" placeholder="bpm (leer=∞)" /></td>
+      </tr>
+    `);
+  });
+}
+
+function readExpertZones() {
+  const zones = ZONE_NAMES.map((name, i) => ({
+    name, color: ZONE_COLORS[i], powerMin: 0, powerMax: null, hrMin: 0, hrMax: null
+  }));
+  document.querySelectorAll('.zone-input').forEach(inp => {
+    const zi    = parseInt(inp.dataset.zone);
+    const field = inp.dataset.field;
+    const val   = inp.value.trim() === '' ? null : parseFloat(inp.value);
+    zones[zi][field] = (val === null || !Number.isFinite(val)) ? null : val;
+  });
+  zones.forEach(z => {
+    if (z.powerMin === null) z.powerMin = 0;
+    if (z.hrMin    === null) z.hrMin    = 0;
+  });
+  return zones;
+}
+
+function renderZonesPreview(zones) {
+  const preview = document.getElementById('zonesPreview');
+  const grid    = document.getElementById('zonesPreviewGrid');
+  preview.style.display = '';
+  grid.innerHTML = zones.map(z => `
+    <div class="zone-preview-card" style="border-color:${z.color}">
+      <span class="zone-dot" style="background:${z.color}"></span>
+      <strong>${z.name}</strong>
+      <span>${z.powerMin}–${z.powerMax ?? '∞'} W</span>
+      <span>${z.hrMin}–${z.hrMax ?? '∞'} bpm</span>
+    </div>
+  `).join('');
+}
+
+function renderZoneAnalysis(records, zones) {
+  const container = document.getElementById('rangeZoneAnalysis');
+  if (!container) return;
+  const result   = analyzeZones(records, zones);
+  const hasPower = result.some(z => z.powerSeconds > 0);
+  const hasHr    = result.some(z => z.hrSeconds    > 0);
+  if (!hasPower && !hasHr) {
+    container.innerHTML = '<p class="muted">Keine Leistungs- oder HF-Daten für Zonenanalyse.</p>';
+    return;
+  }
+  container.innerHTML = `
+    <div class="zone-bars">
+      ${hasPower ? `<div class="zone-bar-group"><h4>Leistungszonen</h4>${result.map(z => `
+        <div class="zone-bar-row">
+          <span class="zone-label">${z.name}</span>
+          <div class="zone-bar-track"><div class="zone-bar-fill" style="width:${z.powerPct.toFixed(1)}%;background:${z.color}"></div></div>
+          <span class="zone-bar-pct">${z.powerPct.toFixed(0)}%</span>
+          <span class="zone-bar-time">${formatDuration(z.powerSeconds)}</span>
+        </div>`).join('')}</div>` : ''}
+      ${hasHr ? `<div class="zone-bar-group"><h4>HF-Zonen</h4>${result.map(z => `
+        <div class="zone-bar-row">
+          <span class="zone-label">${z.name}</span>
+          <div class="zone-bar-track"><div class="zone-bar-fill" style="width:${z.hrPct.toFixed(1)}%;background:${z.color}"></div></div>
+          <span class="zone-bar-pct">${z.hrPct.toFixed(0)}%</span>
+          <span class="zone-bar-time">${formatDuration(z.hrSeconds)}</span>
+        </div>`).join('')}</div>` : ''}
+    </div>`;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -300,6 +469,8 @@ function handleReset() {
   clearAltitudeRangeMmpMarkers();
   clearMapMmpRanges();
   clearAltitudeRangeMmpFills();
+  lastAbsoluteMarkers = {};
+  activeMmpLabels = new Set(['1min', '5min', '10min', '20min', '30min', '60min']);
 
   rangePanel.style.display = 'none';
   currentRecords = [];
@@ -596,7 +767,7 @@ function highlightAltitudeRange(fromIndex, toIndex) {
   if (!chart) return;
 
   const rangeDataset = chart.data.datasets[0]; // Ausgewählter Bereich
-  const mainDataset = chart.data.datasets[6];  // Höhe (m)
+  const mainDataset = chart.data.datasets[7];  // Höhe (m)
 
   if (!mainDataset || !rangeDataset) return;
 
@@ -647,8 +818,8 @@ function updatePositionCursor(records, index) {
   const chart = getAltitudeChart();
   if (!chart) return;
 
-  const mainDataset = chart.data.datasets[6];   // Höhe (m)
-  const cursorDataset = chart.data.datasets[7]; // Position
+  const mainDataset = chart.data.datasets[7];   // Höhe (m)
+  const cursorDataset = chart.data.datasets[8]; // Position
   if (!mainDataset || !cursorDataset) return;
 
   const src = mainDataset.data;

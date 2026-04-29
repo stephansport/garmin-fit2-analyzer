@@ -46,6 +46,34 @@
       <div id="statusBox" class="status-box info">Noch keine Datei geladen.</div>
     </section>
 
+    <!-- Profil / Zonen -->
+    <section class="panel zones-panel">
+      <h2>Profil / Zonen</h2>
+      <div class="zones-mode-toggle">
+        <button class="zones-tab active" id="zoneTabSimple" type="button">Einfach (FTP + HFmax)</button>
+        <button class="zones-tab" id="zoneTabExpert" type="button">Experte</button>
+      </div>
+      <div id="zoneModeSimple">
+        <div class="zones-inputs">
+          <label>FTP (Watt) <input id="inputFtp" type="number" min="1" max="600" placeholder="z.B. 250" /></label>
+          <label>HFmax (bpm) <input id="inputHrMax" type="number" min="100" max="220" placeholder="z.B. 185" /></label>
+        </div>
+        <button id="calcZonesBtn" class="primary-button" type="button">Zonen berechnen</button>
+      </div>
+      <div id="zoneModeExpert" style="display:none">
+        <p class="muted">Leistungszonen (Watt) und Herzfrequenzzonen (bpm) direkt eingeben:</p>
+        <table class="zones-expert-table">
+          <thead><tr><th>Zone</th><th>Name</th><th>Leistung von</th><th>Leistung bis</th><th>HF von</th><th>HF bis</th></tr></thead>
+          <tbody id="zonesExpertBody"></tbody>
+        </table>
+        <button id="applyExpertZonesBtn" class="primary-button" type="button">Zonen übernehmen</button>
+      </div>
+      <div id="zonesPreview" style="display:none; margin-top:1rem;">
+        <h3>Aktive Zonen</h3>
+        <div id="zonesPreviewGrid" class="zones-preview-grid"></div>
+      </div>
+    </section>
+
     <!-- Überblick -->
     <section class="panel summary-panel">
       <h2>Überblick</h2>
@@ -152,6 +180,11 @@
       <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Beste Leistungen (Bereich)</h3>
       <div id="rangeMaxMeanPowerPanel" class="metrics-grid range-mmp-grid">
         <!-- wird von displayRangeMaxMeanPower befüllt -->
+      </div>
+
+      <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Zonenanalyse (Bereich)</h3>
+      <div id="rangeZoneAnalysis">
+        <p class="muted">Bitte erst Zonen im Panel "Profil / Zonen" definieren.</p>
       </div>
     </section>
 
