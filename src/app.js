@@ -55,7 +55,10 @@ let currentRecords = [];
 let cursorMarker = null;
 let activeMmpLabels = new Set(['1min', '5min', '10min', '20min', '30min', '60min']);
 let lastAbsoluteMarkers = {};
+<<<<<<< HEAD
 let currentZones = [];
+=======
+>>>>>>> 118a8ef8746e3bdf03a15c193a5f44eba1d9dd1d
 
 const rangeFields = {
   duration: document.getElementById('rangeDuration'),
@@ -131,8 +134,11 @@ function applyRangeStats(fromIndex, toIndex, records) {
   lastAbsoluteMarkers = absoluteMarkers;
 
   applyMmpVisibility(records);
+<<<<<<< HEAD
 
   if (currentZones.length) renderZoneAnalysis(slice, currentZones);
+=======
+>>>>>>> 118a8ef8746e3bdf03a15c193a5f44eba1d9dd1d
 }
 
 function absolutizeRangeMmp(rangeMMP, baseIndex) {
@@ -322,6 +328,7 @@ function applyMmpVisibility(records) {
   setAltitudeRangeMmpMarkers(filtered);
   highlightMapMmpRanges(records, filtered);
   setAltitudeRangeMmpFills(filtered);
+<<<<<<< HEAD
 }
 
 /* -------------------------------------------------------------------------- */
@@ -445,6 +452,8 @@ function renderZoneAnalysis(records, zones) {
           <span class="zone-bar-time">${formatDuration(z.hrSeconds)}</span>
         </div>`).join('')}</div>` : ''}
     </div>`;
+=======
+>>>>>>> 118a8ef8746e3bdf03a15c193a5f44eba1d9dd1d
 }
 
 /* -------------------------------------------------------------------------- */
